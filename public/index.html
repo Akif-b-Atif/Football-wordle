@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+<title>Matchday — Daily Football Guessing Game</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div class="stripes-bg" aria-hidden="true"></div>
+
+<header class="board">
+  <div class="board-inner">
+    <div class="brand">
+      <span class="brand-mark">⚽</span>
+      <div class="brand-text">
+        <h1>MATCHDAY</h1>
+        <span class="brand-sub">the daily footballer guessing game</span>
+      </div>
+    </div>
+    <nav class="board-actions">
+      <button class="icon-btn" id="howToPlayBtn" title="How to play" aria-label="How to play">?</button>
+      <button class="icon-btn" id="statsBtn" title="Statistics" aria-label="Statistics">📊</button>
+    </nav>
+  </div>
+  <div class="mode-tabs" role="tablist" aria-label="Game mode">
+    <button class="mode-tab active" data-mode="daily" role="tab" aria-selected="true">Daily Challenge</button>
+    <button class="mode-tab" data-mode="unlimited" role="tab" aria-selected="false">Unlimited</button>
+  </div>
+</header>
+
+<main class="pitch">
+
+  <section class="guess-panel">
+    <div class="search-wrap">
+      <input
+        id="guessInput"
+        type="text"
+        autocomplete="off"
+        spellcheck="false"
+        placeholder="Type a footballer's name…"
+        aria-label="Guess a footballer"
+      />
+      <div id="suggestions" class="suggestions" hidden></div>
+    </div>
+    <div class="guess-meta">
+      <span id="guessCounter">0 / 8 guesses</span>
+      <span id="statusMsg" class="status-msg" role="status" aria-live="polite"></span>
+    </div>
+  </section>
+
+  <section class="board-scroll" aria-label="Guess results">
+    <div class="results-table" id="resultsTable">
+      <div class="results-head" id="resultsHead">
+        <div class="cell head-cell player-col">Player</div>
+        <div class="cell head-cell">Nation</div>
+        <div class="cell head-cell">League</div>
+        <div class="cell head-cell">Club</div>
+        <div class="cell head-cell">Pos</div>
+        <div class="cell head-cell">Age</div>
+        <div class="cell head-cell">OVR</div>
+        <div class="cell head-cell">Weak Ft</div>
+        <div class="cell head-cell">Skill</div>
+        <div class="cell head-cell traits-col">Shared Traits</div>
+      </div>
+      <div class="results-body" id="resultsBody"></div>
+    </div>
+  </section>
+
+  <section id="endPanel" class="end-panel" hidden>
+    <div class="end-card" id="endCard"></div>
+  </section>
+
+</main>
+
+<footer class="pitch-footer">
+  <p>Guess the club, not the crest — every row is a clue. New Daily Challenge every day at 00:00 UTC.</p>
+</footer>
+
+<!-- How to play modal -->
+<div class="modal-overlay" id="howToOverlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="howToTitle">
+    <button class="modal-close" data-close-modal>&times;</button>
+    <h2 id="howToTitle">How to play</h2>
+    <p>Guess the hidden footballer in 8 tries. After each guess, the row tells you how close you are.</p>
+    <ul class="legend-list">
+      <li><span class="swatch green"></span> <strong>Green</strong> — exact match</li>
+      <li><span class="swatch yellow"></span> <strong>Yellow</strong> — position only: same positional group, not exact spot</li>
+      <li><span class="swatch gray"></span> <strong>Gray</strong> — no match</li>
+      <li><span class="swatch arrow">↑ / ↓</span> <strong>Arrows</strong> — for Age / Overall / Weak Foot / Skill Moves: the hidden player's value is higher or lower than your guess</li>
+      <li><span class="swatch traits">✓</span> <strong>Shared Traits</strong> — any gameplay traits your guess has in common with the hidden player</li>
+    </ul>
+    <p class="modal-note">Daily Challenge gives everyone the same footballer each day. Unlimited mode picks a fresh random player every game.</p>
+  </div>
+</div>
+
+<!-- Stats modal -->
+<div class="modal-overlay" id="statsOverlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="statsTitle">
+    <button class="modal-close" data-close-modal>&times;</button>
+    <h2 id="statsTitle">Statistics</h2>
+    <div class="stats-grid" id="statsGrid"></div>
+    <h3 class="dist-title">Guess distribution</h3>
+    <div class="dist-chart" id="distChart"></div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
