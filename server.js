@@ -26,6 +26,13 @@ const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, "data", "players.csv");
 const MAX_GUESSES = 8;
 
+// Every player in the CSV is a valid *guess* (autocomplete/search), but only
+// the top N players — by the CSV's own sort order (overall desc, then name)
+// — are eligible to be picked as the *hidden* player for Daily or Unlimited
+// mode. This keeps the answer pool to well-known, high-rated players while
+// still letting people guess anyone in the Big 5 leagues dataset.
+const ANSWER_POOL_SIZE = parseInt(process.env.ANSWER_POOL_SIZE, 10) || 182;
+
 if (JWT_SECRET === "dev-secret-change-me") {
   console.warn(
     "[football-wordle] WARNING: using the default JWT_SECRET. Set the JWT_SECRET " +
@@ -94,6 +101,10 @@ function loadPool() {
       skill_moves: parseInt(row.skill_moves, 10) || null,
       traits,
       face_url: row.player_face_url || null,
+      // Position among valid rows in the CSV's own file order (already sorted
+      // overall desc, then name by data/cleaner.py). Used to build the
+      // answer-eligible pool below; unrelated to the id-sort applied after.
+      rank: pool.length,
     });
   }
 
@@ -112,7 +123,20 @@ function loadPool() {
 let POOL = loadPool();
 const BY_ID = new Map(POOL.map((p) => [p.id, p]));
 
-console.log(`[football-wordle] loaded ${POOL.length} players from ${DATA_FILE}`);
+// Every player in POOL is a valid guess. ANSWER_POOL is the subset that can
+// actually be chosen as the hidden player (Daily or Unlimited).
+const ANSWER_POOL = POOL.filter((p) => p.rank < ANSWER_POOL_SIZE);
+
+if (ANSWER_POOL.length === 0) {
+  throw new Error(
+    `ANSWER_POOL_SIZE (${ANSWER_POOL_SIZE}) produced an empty answer pool. Check DATA_FILE and ANSWER_POOL_SIZE.`
+  );
+}
+
+console.log(
+  `[football-wordle] loaded ${POOL.length} players from ${DATA_FILE} ` +
+    `(${ANSWER_POOL.length} eligible as the hidden player, top ${ANSWER_POOL_SIZE} by rating)`
+);
 
 // ---------------------------------------------------------------------------
 // Position groups
@@ -155,8 +179,8 @@ function hashString(str) {
 }
 
 function dailyPlayerFor(dateKey) {
-  const idx = hashString(dateKey) % POOL.length;
-  return POOL[idx];
+  const idx = hashString(dateKey) % ANSWER_POOL.length;
+  return ANSWER_POOL[idx];
 }
 
 // ---------------------------------------------------------------------------
@@ -293,7 +317,7 @@ app.post("/api/game/new", (req, res) => {
     dateKey = todayKey();
     hiddenId = dailyPlayerFor(dateKey).id;
   } else {
-    hiddenId = POOL[Math.floor(Math.random() * POOL.length)].id;
+    hiddenId = ANSWER_POOL[Math.floor(Math.random() * ANSWER_POOL.length)].id;
   }
 
   const session = {
@@ -381,6 +405,15 @@ app.post("/api/game/state", (req, res) => {
 
 app.use(express.static(path.join(__dirname, "public")));
 
-app.listen(PORT, () => {
-  console.log(`[football-wordle] listening on port ${PORT}`);
-});
+// On Vercel (and other serverless hosts), the platform imports `app` and
+// calls it directly per-request — it never runs this file as a long-lived
+// process, so app.listen() is skipped there. Locally (`npm start`) and on
+// traditional Node hosts, this file *is* the entry point, so it listens
+// normally.
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`[football-wordle] listening on port ${PORT}`);
+  });
+}
+
+module.exports = app;

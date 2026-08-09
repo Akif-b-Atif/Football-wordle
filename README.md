@@ -14,7 +14,25 @@ weak foot, skill moves, and shared gameplay traits as clues.
   been made) lives in a signed JWT that's handed back and forth with the
   client, so the server doesn't need a database or sticky sessions.
 - **Frontend**: plain HTML/CSS/JS (`public/`) — no build step required.
-- **Data**: a CSV of players. A small curated sample (`data/players.csv`)
+- **Data**: `data/players.csv`, ~2,976 real players from the Big 5 European
+  leagues (Premier League, La Liga, Bundesliga, Serie A, Ligue 1), trimmed
+  down from a full FIFA-style export (`data/players_raw.csv`, ~19,240
+  players) by `data/cleaner.py`. The cleaner keeps only Big-5-league rows,
+  drops irrelevant columns, de-duplicates by `sofifa_id`, and sorts the
+  result by `overall` (descending) then `short_name`. Every player in this
+  file is a valid **guess** — see "Answer pool" below for which of them can
+  actually be the hidden player.
+
+### Answer pool (who can be the hidden player)
+
+All ~2,976 players in `data/players.csv` are searchable and guessable, but
+only the **top `ANSWER_POOL_SIZE` players** (default **182**), ranked by
+their position in the already-sorted CSV (i.e. the 182 highest-`overall`
+players), are eligible to actually *be* the hidden player for Daily
+Challenge or Unlimited mode. This keeps every day's answer recognizable —
+you can still guess an obscure squad player, but you'll never have to guess
+one *as* the answer. Change this with the `ANSWER_POOL_SIZE` environment
+variable (see below).
 
 ## Running locally
 
@@ -30,9 +48,18 @@ Then open http://localhost:3000
 
 ## Using your own player data
 
-Replace `data/players.csv` with your full CSV — it can use the exact same
-109-column FIFA-style schema. The app only actually *reads* these
-columns, so everything else is fine to leave populated or blank:
+`data/players.csv` already has the trimmed 14-column schema the app expects
+(produced by `data/cleaner.py` from a full FIFA-style export). To swap in
+your own data, either:
+
+- point `data/cleaner.py`'s `INPUT_CSV` at your own full export and re-run
+  `python data/cleaner.py` from inside `data/` (edit `BIG_5_LEAGUES` first
+  if you want different leagues), or
+- hand-build a CSV with the same columns below and set `DATA_FILE` to point
+  at it.
+
+The app only actually *reads* these columns, so anything else is fine to
+leave populated or blank:
 
 | Column | Used for |
 |---|---|
@@ -49,27 +76,36 @@ columns, so everything else is fine to leave populated or blank:
 | `player_traits` | Shared Traits column |
 | `player_face_url` | player photo in search results / results table |
 
-**Data cleaning applied automatically at startup** (per the product spec):
+**Data cleaning applied automatically at startup** (per the product spec),
+on top of what `cleaner.py` already did:
 - Duplicate `sofifa_id` rows are dropped (first occurrence wins).
-- Rows missing any required field above are excluded from the hidden-player
-  pool and from being guessable.
+- Rows missing any required field above are excluded — from *both* being
+  guessable and from being answer-eligible.
 - Rows whose `short_name` looks like a generic placeholder (e.g. `"Player 4"`)
   are excluded.
 - This FIFA-style export has no explicit "retired" flag, so if your dataset
   includes retired players and you want to exclude them, filter those rows
   out of the CSV before deploying (e.g. drop rows below a certain
   `club_contract_valid_until`, or rows with no `club_team_id`).
+- Whatever survives this cleaning keeps the **rank** it had in the CSV's own
+  sort order; the first `ANSWER_POOL_SIZE` surviving rows become the answer
+  pool (see above).
 
 If you point `DATA_FILE` at a much larger CSV (thousands of players), nothing
-else needs to change — the whole file is just loaded into memory once.
+else needs to change — the whole file is just loaded into memory once. Just
+make sure it's sorted the way you want the top-`ANSWER_POOL_SIZE` cutoff to
+work (`cleaner.py` already sorts by `overall` descending).
 
 ## Game rules implemented
 
 - 8 guesses per game.
 - Daily Challenge: every player gets the same hidden footballer each
-  calendar day (UTC), chosen deterministically from the pool so it's
-  consistent across server restarts without needing a database.
-- Unlimited Mode: a fresh random hidden player every game.
+  calendar day (UTC), chosen deterministically from the **answer pool** (top
+  `ANSWER_POOL_SIZE` by rating — see "Answer pool" above) so it's consistent
+  across server restarts without needing a database.
+- Unlimited Mode: a fresh random hidden player every game, also drawn from
+  the answer pool. In both modes you can still *guess* any of the ~2,976
+  players in the full dataset.
 - Feedback columns: Nationality, League, Club, Position (green / yellow
   same-group / gray), Age, Overall, Weak Foot, Skill Moves (green / ↑ / ↓),
   and Shared Traits (only traits in common are revealed).
@@ -85,3 +121,44 @@ else needs to change — the whole file is just loaded into memory once.
 
 See `.env.example`. The only one you should always set explicitly in
 production is `JWT_SECRET`.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `JWT_SECRET` | `dev-secret-change-me` | Signs game session tokens. **Always set a long random value in production** — anyone with it can forge/inspect sessions. |
+| `PORT` | `3000` | Port the server listens on locally. Most hosts (including Vercel) set/ignore this for you. |
+| `DATA_FILE` | `./data/players.csv` | Path to the player CSV to load at startup. |
+| `ANSWER_POOL_SIZE` | `182` | How many of the top-rated players (by the CSV's sort order) are eligible to be the hidden player. Doesn't affect what's guessable. |
+| `ALLOW_ORIGIN` | *(unset)* | Only needed if you host the frontend separately from the API. |
+
+## Deploying to Vercel (free / Hobby tier)
+
+This app is small and stateless enough (no database — game state lives in a
+signed JWT, and the player CSV is just loaded into memory) to run
+comfortably as a Vercel serverless function on the free tier.
+
+1. **Push to GitHub** if you haven't already — Vercel deploys from a Git repo.
+2. **Import the project**: on [vercel.com](https://vercel.com), click
+   **Add New → Project**, select this repo, and choose **Other** as the
+   framework preset (not Next.js/etc.) — Vercel picks up the included
+   `vercel.json`, which tells it to run `server.js` as a Node serverless
+   function and route all requests (including the static `public/` assets,
+   served by Express itself) through it.
+3. **Set environment variables**: in the import screen (or later under
+   **Settings → Environment Variables**), add:
+   - `JWT_SECRET` — a long random string, e.g. generate one locally with
+     `openssl rand -hex 32`.
+   - Optionally `ANSWER_POOL_SIZE` if you want a different cutoff than 182.
+4. **Deploy**. Vercel will build and give you a live URL like
+   `your-project.vercel.app`.
+
+A couple of things worth knowing about this setup:
+- Vercel serverless functions can cold-start between requests, so
+  `data/players.csv` gets reloaded into memory more often than on a
+  traditional always-on server. At ~2,976 rows this is effectively
+  instant, so it's not a practical concern.
+- The JWT-based session design is a good fit for serverless specifically
+  because there's no in-memory session state to lose between invocations —
+  every request carries everything it needs in the token.
+- Free tier limits are generous for this app: 100GB bandwidth/month and a
+  10-second execution cap per request on Hobby, versus the app's
+  millisecond-scale search/guess endpoints.
