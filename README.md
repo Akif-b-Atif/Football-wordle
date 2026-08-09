@@ -14,9 +14,7 @@ weak foot, skill moves, and shared gameplay traits as clues.
   been made) lives in a signed JWT that's handed back and forth with the
   client, so the server doesn't need a database or sticky sessions.
 - **Frontend**: plain HTML/CSS/JS (`public/`) — no build step required.
-- **Data**: a CSV of players. A small curated sample (`data/players.csv`,
-  ~27 real players) is included so the app works out of the box. Swap in
-  your full dataset before deploying for real (see below).
+- **Data**: a CSV of players. A small curated sample (`data/players.csv`)
 
 ## Running locally
 
@@ -33,7 +31,7 @@ Then open http://localhost:3000
 ## Using your own player data
 
 Replace `data/players.csv` with your full CSV — it can use the exact same
-109-column FIFA-style schema you shared. The app only actually *reads* these
+109-column FIFA-style schema. The app only actually *reads* these
 columns, so everything else is fine to leave populated or blank:
 
 | Column | Used for |
