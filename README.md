@@ -1,4 +1,4 @@
-# Matchday — Football Wordle
+# Footle — Football Wordle
 
 A daily footballer-guessing game, in the spirit of Wordle: guess the hidden
 player in 8 tries, using nationality, league, club, position, age, overall,
@@ -129,36 +129,3 @@ production is `JWT_SECRET`.
 | `DATA_FILE` | `./data/players.csv` | Path to the player CSV to load at startup. |
 | `ANSWER_POOL_SIZE` | `182` | How many of the top-rated players (by the CSV's sort order) are eligible to be the hidden player. Doesn't affect what's guessable. |
 | `ALLOW_ORIGIN` | *(unset)* | Only needed if you host the frontend separately from the API. |
-
-## Deploying to Vercel (free / Hobby tier)
-
-This app is small and stateless enough (no database — game state lives in a
-signed JWT, and the player CSV is just loaded into memory) to run
-comfortably as a Vercel serverless function on the free tier.
-
-1. **Push to GitHub** if you haven't already — Vercel deploys from a Git repo.
-2. **Import the project**: on [vercel.com](https://vercel.com), click
-   **Add New → Project**, select this repo, and choose **Other** as the
-   framework preset (not Next.js/etc.) — Vercel picks up the included
-   `vercel.json`, which tells it to run `server.js` as a Node serverless
-   function and route all requests (including the static `public/` assets,
-   served by Express itself) through it.
-3. **Set environment variables**: in the import screen (or later under
-   **Settings → Environment Variables**), add:
-   - `JWT_SECRET` — a long random string, e.g. generate one locally with
-     `openssl rand -hex 32`.
-   - Optionally `ANSWER_POOL_SIZE` if you want a different cutoff than 182.
-4. **Deploy**. Vercel will build and give you a live URL like
-   `your-project.vercel.app`.
-
-A couple of things worth knowing about this setup:
-- Vercel serverless functions can cold-start between requests, so
-  `data/players.csv` gets reloaded into memory more often than on a
-  traditional always-on server. At ~2,976 rows this is effectively
-  instant, so it's not a practical concern.
-- The JWT-based session design is a good fit for serverless specifically
-  because there's no in-memory session state to lose between invocations —
-  every request carries everything it needs in the token.
-- Free tier limits are generous for this app: 100GB bandwidth/month and a
-  10-second execution cap per request on Hobby, versus the app's
-  millisecond-scale search/guess endpoints.

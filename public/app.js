@@ -37,6 +37,7 @@
   // -------------------------------------------------------------------
   const LS_TOKEN_PREFIX = "fw_token_"; // + mode (+ dateKey for daily)
   const LS_STATS = "fw_stats_v1";
+  const LS_SEEN_HOWTO = "fw_seen_howto";
 
   function todayKeyLocalGuessFallback() {
     return new Date().toISOString().slice(0, 10);
@@ -304,7 +305,7 @@
         return cells.map((r) => (r === "green" ? "🟩" : r === "yellow" ? "🟨" : "⬜")).join("");
       })
       .join("\n");
-    const text = `Matchday ${state.dateKey} — ${won ? `${guessesUsed}/8` : "X/8"}\n${grid}`;
+    const text = `Footle ${state.dateKey} — ${won ? `${guessesUsed}/8` : "X/8"}\n${grid}`;
     if (navigator.share) {
       navigator.share({ text }).catch(() => {});
     } else if (navigator.clipboard) {
@@ -347,9 +348,10 @@
       highlightActive(items);
     } else if (e.key === "Enter") {
       e.preventDefault();
-      if (activeIndex >= 0 && items[activeIndex]) {
-        items[activeIndex].click();
-      }
+      // If nothing's been arrowed to yet, Enter picks the top match —
+      // matches how most people actually use the search box.
+      const target = activeIndex >= 0 ? items[activeIndex] : items[0];
+      if (target) target.click();
     } else if (e.key === "Escape") {
       hideSuggestions();
     }
@@ -422,20 +424,35 @@
         t.classList.toggle("active", t === tab);
         t.setAttribute("aria-selected", t === tab ? "true" : "false");
       });
-      await startOrResume(tab.dataset.mode);
+      try {
+        await startOrResume(tab.dataset.mode);
+      } catch (err) {
+        setStatus(err.message);
+      }
     });
   });
 
   // -------------------------------------------------------------------
   // Modals
   // -------------------------------------------------------------------
-  function openModal(overlay) { overlay.hidden = false; }
-  function closeModal(overlay) { overlay.hidden = true; }
+  let lastFocused = null;
 
-  els.howToBtn.addEventListener("click", () => openModal(els.howToOverlay));
-  els.statsBtn.addEventListener("click", () => {
+  function openModal(overlay, trigger) {
+    lastFocused = trigger || document.activeElement;
+    overlay.hidden = false;
+    const closeBtn = overlay.querySelector(".modal-close");
+    if (closeBtn) closeBtn.focus();
+  }
+  function closeModal(overlay) {
+    if (overlay.hidden) return;
+    overlay.hidden = true;
+    if (lastFocused && typeof lastFocused.focus === "function") lastFocused.focus();
+  }
+
+  els.howToBtn.addEventListener("click", (e) => openModal(els.howToOverlay, e.currentTarget));
+  els.statsBtn.addEventListener("click", (e) => {
     renderStats();
-    openModal(els.statsOverlay);
+    openModal(els.statsOverlay, e.currentTarget);
   });
   document.querySelectorAll("[data-close-modal]").forEach((btn) => {
     btn.addEventListener("click", (e) => closeModal(e.target.closest(".modal-overlay")));
@@ -450,6 +467,15 @@
       document.querySelectorAll(".modal-overlay:not([hidden])").forEach(closeModal);
     }
   });
+
+  // Show "How to play" automatically the very first time someone opens the
+  // game, same idea as Wordle's first-run tutorial. Never shown again after
+  // that, and Statistics never auto-opens — nothing worth showing yet on a
+  // first visit.
+  if (!localStorage.getItem(LS_SEEN_HOWTO)) {
+    openModal(els.howToOverlay, els.howToBtn);
+    localStorage.setItem(LS_SEEN_HOWTO, "1");
+  }
 
   function renderStats() {
     const s = loadStats();

@@ -1,7 +1,7 @@
 {
-  "name": "football-wordle",
+  "name": "footle",
   "version": "1.0.0",
-  "description": "A Wordle-style daily football guessing game",
+  "description": "Footle — a Wordle-style daily football guessing game",
   "main": "server.js",
   "type": "commonjs",
   "engines": {

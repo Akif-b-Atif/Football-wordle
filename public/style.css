@@ -356,6 +356,12 @@ button { font-family: inherit; }
   z-index: 100;
   padding: 16px;
 }
+/* `display: flex` above wins over the browser's built-in [hidden] rule
+   because both are author-origin-vs-UA-origin, not a specificity fight —
+   so without this, a "hidden" overlay still renders and eats clicks. */
+.modal-overlay[hidden] {
+  display: none;
+}
 .modal {
   background: var(--chalk);
   color: var(--ink);
@@ -367,6 +373,12 @@ button { font-family: inherit; }
   box-shadow: var(--card-shadow);
   max-height: 85vh;
   overflow-y: auto;
+  animation: modalIn 0.18s ease;
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 .modal h2 { font-size: 20px; margin-bottom: 10px; }
 .modal p { line-height: 1.5; font-size: 14px; }
@@ -382,6 +394,7 @@ button { font-family: inherit; }
   line-height: 1;
 }
 .modal-close:hover { color: var(--ink); }
+.modal-close:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; border-radius: 4px; }
 
 .legend-list { list-style: none; padding: 0; margin: 14px 0; }
 .legend-list li { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 14px; }
@@ -426,4 +439,5 @@ button { font-family: inherit; }
 @media (prefers-reduced-motion: reduce) {
   .result-row { animation: none; }
   .icon-btn { transition: none; }
+  .modal { animation: none; }
 }
