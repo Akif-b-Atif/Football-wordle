@@ -1,5 +1,7 @@
 # Footle — Football Wordle
 
+[deployment](https://footle-pi.vercel.app/)
+
 A daily footballer-guessing game, in the spirit of Wordle: guess the hidden
 player in 8 tries, using nationality, league, club, position, age, overall,
 weak foot, skill moves, and shared gameplay traits as clues.
