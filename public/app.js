@@ -13,6 +13,8 @@
     history: [], // feedback rows
     gameOver: false,
     won: false,
+    result: null, // { won, reveal, guessesUsed } once the game is over
+    endTimer: null,
   };
 
   const els = {
@@ -30,13 +32,23 @@
     statsOverlay: document.getElementById("statsOverlay"),
     statsGrid: document.getElementById("statsGrid"),
     distChart: document.getElementById("distChart"),
+    statsMode: document.getElementById("statsMode"),
+    resultOverlay: document.getElementById("resultOverlay"),
+    resultTitle: document.getElementById("resultTitle"),
+    resultReveal: document.getElementById("resultReveal"),
+    shareText: document.getElementById("shareText"),
+    copyBtn: document.getElementById("copyBtn"),
+    copyStatus: document.getElementById("copyStatus"),
+    resultStatsTitle: document.getElementById("resultStatsTitle"),
+    resultStatsGrid: document.getElementById("resultStatsGrid"),
+    resultDistChart: document.getElementById("resultDistChart"),
   };
 
   // -------------------------------------------------------------------
   // Local storage keys
   // -------------------------------------------------------------------
   const LS_TOKEN_PREFIX = "fw_token_"; // + mode (+ dateKey for daily)
-  const LS_STATS = "fw_stats_v1";
+  const LS_STATS = { daily: "fw_stats_v1", unlimited: "fw_stats_unlimited_v1" };
   const LS_SEEN_HOWTO = "fw_seen_howto_v2"; // bumped when the rules changed (yellow nation/club, new columns)
 
   function todayKeyLocalGuessFallback() {
@@ -48,9 +60,9 @@
     return `${LS_TOKEN_PREFIX}unlimited_active`;
   }
 
-  function loadStats() {
+  function loadStats(mode) {
     try {
-      return JSON.parse(localStorage.getItem(LS_STATS)) || defaultStats();
+      return JSON.parse(localStorage.getItem(LS_STATS[mode])) || defaultStats();
     } catch {
       return defaultStats();
     }
@@ -65,17 +77,15 @@
       lastDailyDateKey: null,
     };
   }
-  function saveStats(s) {
-    localStorage.setItem(LS_STATS, JSON.stringify(s));
+  function saveStats(mode, s) {
+    localStorage.setItem(LS_STATS[mode], JSON.stringify(s));
   }
 
+  // Daily Challenge and Unlimited each keep their own stats, so the numbers in
+  // the game-over popup always include the game you just finished.
   function recordResult({ mode, dateKey, won, guessesUsed }) {
-    // Only the Daily Challenge feeds the persistent streak/stat tracker,
-    // matching the classic Wordle-style behaviour. Unlimited games are
-    // just for fun and don't affect streaks.
-    if (mode !== "daily") return;
-    const s = loadStats();
-    if (s.lastDailyDateKey === dateKey) return; // already recorded today
+    const s = loadStats(mode);
+    if (mode === "daily" && s.lastDailyDateKey === dateKey) return; // already recorded today
     s.played += 1;
     if (won) {
       s.won += 1;
@@ -85,8 +95,8 @@
     } else {
       s.currentStreak = 0;
     }
-    s.lastDailyDateKey = dateKey;
-    saveStats(s);
+    if (mode === "daily") s.lastDailyDateKey = dateKey;
+    saveStats(mode, s);
   }
 
   // -------------------------------------------------------------------
@@ -143,6 +153,8 @@
     state.guessedIds = new Set();
     state.gameOver = false;
     state.won = false;
+    state.result = null;
+    clearTimeout(state.endTimer);
     els.resultsBody.innerHTML = "";
     els.endPanel.hidden = true;
     els.statusMsg.textContent = "";
@@ -176,7 +188,7 @@
         state.gameOver = true;
         state.won = data.won;
         recordResult({ mode: state.mode, dateKey: state.dateKey, won: data.won, guessesUsed: data.guessesUsed });
-        showEndPanel(data.won, data.reveal, data.guessesUsed);
+        showEndPanel(data.won, data.reveal, data.guessesUsed, { autoOpenResult: true });
       }
     } catch (err) {
       setStatus(err.message);
@@ -308,34 +320,50 @@
     return div;
   }
 
-  function showEndPanel(won, reveal, guessesUsed) {
+  function showEndPanel(won, reveal, guessesUsed, { autoOpenResult = false } = {}) {
+    state.result = { won, reveal, guessesUsed };
     els.endPanel.hidden = false;
     const card = els.endCard;
     card.className = `end-card ${won ? "win" : "lose"}`;
 
-    const shareBtn = state.mode === "daily" ? `<button class="btn btn-secondary" id="shareBtn">Share result</button>` : "";
     const nextBtn = state.mode === "unlimited" ? `<button class="btn btn-primary" id="playAgainBtn">Play again</button>` : "";
 
     card.innerHTML = `
       <h2>${won ? "Full time — you got it!" : "Full time — out of guesses"}</h2>
       <p>${won ? `Found in ${guessesUsed} guess${guessesUsed === 1 ? "" : "es"}.` : "Better luck next time."}</p>
       <div class="reveal">
-        ${faceImg(reveal.face_url, reveal.id, reveal.short_name)}
-        <div>
-          <div class="reveal-name">${escapeHtml(reveal.long_name || reveal.short_name)}</div>
-          <div class="reveal-sub">${escapeHtml(reveal.club_name)} · ${escapeHtml(reveal.nationality_name)} · ${escapeHtml(reveal.primary_position)} · OVR ${reveal.overall}</div>
-        </div>
+        ${revealHtml(reveal)}
       </div>
-      <div class="end-actions">${nextBtn}${shareBtn}</div>
+      <div class="end-actions">${nextBtn}<button class="btn btn-secondary" id="viewResultBtn">Share &amp; stats</button></div>
     `;
 
     const playAgain = document.getElementById("playAgainBtn");
     if (playAgain) playAgain.addEventListener("click", () => startNewUnlimited());
 
-    const share = document.getElementById("shareBtn");
-    if (share) share.addEventListener("click", () => shareResult(won, guessesUsed));
+    const viewBtn = document.getElementById("viewResultBtn");
+    viewBtn.addEventListener("click", () => openResultModal(viewBtn));
 
     els.endPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+
+    // Pop the result up right after a game finishes (not when resuming an
+    // already-finished game on page load). The short delay lets you see the
+    // last row land first.
+    if (autoOpenResult) {
+      const result = state.result;
+      clearTimeout(state.endTimer);
+      state.endTimer = setTimeout(() => {
+        if (state.result === result) openResultModal(viewBtn);
+      }, 900);
+    }
+  }
+
+  function revealHtml(reveal) {
+    return `
+        ${faceImg(reveal.face_url, reveal.id, reveal.short_name)}
+        <div>
+          <div class="reveal-name">${escapeHtml(reveal.long_name || reveal.short_name)}</div>
+          <div class="reveal-sub">${escapeHtml(reveal.club_name)} · ${escapeHtml(reveal.nationality_name)} · ${escapeHtml(reveal.primary_position)} · OVR ${reveal.overall}</div>
+        </div>`;
   }
 
   async function startNewUnlimited() {
@@ -343,24 +371,94 @@
     await startOrResume("unlimited");
   }
 
-  function shareResult(won, guessesUsed) {
-    const square = (r) => (r === "green" ? "🟩" : r === "yellow" ? "🟨" : "⬜");
-    // state.history is oldest-first, so the grid reads top to bottom in the
-    // order you guessed (like Wordle).
+  // Day #1 of the Daily Challenge; puzzle numbers count up from here.
+  // Change this if you launched on a different date.
+  const LAUNCH_UTC = Date.UTC(2026, 6, 31); // 31 Jul 2026
+
+  function puzzleNumber(dateKey) {
+    const [y, m, d] = dateKey.split("-").map(Number);
+    return Math.max(1, Math.floor((Date.UTC(y, m - 1, d) - LAUNCH_UTC) / 86400000) + 1);
+  }
+
+  // Wordle-style, spoiler-free summary: only the colours of each guess, never
+  // who you guessed or who the answer was.
+  //
+  //   Footle #12 3/8
+  //
+  //   🟨⬛⬛⬛🟨🟨
+  //   🟩🟨🟨🟨🟩⬛
+  //   🟩🟩🟩🟩🟩🟩
+  function buildShareText() {
+    const { won, guessesUsed } = state.result;
+    const square = (r) => (r === "green" ? "🟩" : r === "yellow" ? "🟨" : "⬛");
+    // state.history is oldest-first, so rows read in the order you guessed.
     const grid = state.history
       .map((fb) =>
         [fb.nationality, fb.club, fb.position, fb.age, fb.overall, fb.height].map((c) => square(c.result)).join("")
       )
       .join("\n");
-    const link = /^https?:/.test(location.origin) ? `\n${location.origin}` : "";
-    const text = `Footle ${state.dateKey} — ${won ? `${guessesUsed}/8` : "X/8"}\n${grid}${link}`;
-    if (navigator.share) {
-      navigator.share({ text }).catch(() => {});
-    } else if (navigator.clipboard) {
-      navigator.clipboard.writeText(text);
-      setStatus("Result copied to clipboard!");
+    const name =
+      state.mode === "daily" && state.dateKey
+        ? `Footle #${puzzleNumber(state.dateKey).toLocaleString("en-US")}`
+        : "Footle Unlimited";
+    const link = /^https?:/.test(location.origin) ? `\n\n${location.origin}` : "";
+    return `${name} ${won ? guessesUsed : "X"}/${state.maxGuesses}\n\n${grid}${link}`;
+  }
+
+  // Game-over popup: the answer, the shareable emoji grid, and your stats
+  // (which already include the game you just finished).
+  function openResultModal(trigger) {
+    const r = state.result;
+    if (!r) return;
+    els.resultTitle.textContent = r.won ? "Full time — you got it!" : "Full time — out of guesses";
+    els.resultReveal.innerHTML = revealHtml(r.reveal);
+    els.shareText.textContent = buildShareText();
+    els.copyBtn.textContent = "Copy result";
+    els.copyStatus.textContent = "";
+    els.resultStatsTitle.textContent = `Statistics — ${state.mode === "daily" ? "Daily Challenge" : "Unlimited"}`;
+    renderStats(state.mode, els.resultStatsGrid, els.resultDistChart, r.won ? r.guessesUsed : null);
+    openModal(els.resultOverlay, trigger);
+  }
+
+  async function copyToClipboard(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Older browsers / non-secure pages: fall back to a hidden textarea.
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.cssText = "position:fixed;opacity:0;top:0;left:0";
+      document.body.appendChild(ta);
+      ta.select();
+      let ok = false;
+      try {
+        ok = document.execCommand("copy");
+      } catch {}
+      ta.remove();
+      return ok;
     }
   }
+
+  els.copyBtn.addEventListener("click", async () => {
+    const ok = await copyToClipboard(els.shareText.textContent);
+    if (ok) {
+      els.copyBtn.textContent = "Copied!";
+      els.copyStatus.textContent = "Result copied to clipboard.";
+      setTimeout(() => {
+        els.copyBtn.textContent = "Copy result";
+      }, 2000);
+    } else {
+      // Last resort: select the text so it can be copied by hand.
+      const range = document.createRange();
+      range.selectNodeContents(els.shareText);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      els.copyStatus.textContent = "Couldn't copy automatically. The text is selected, so copy it manually.";
+    }
+  });
 
   // Player photos, with a three-step fallback so a failing image host never
   // leaves a blank grey circle:
@@ -538,7 +636,8 @@
 
   els.howToBtn.addEventListener("click", (e) => openModal(els.howToOverlay, e.currentTarget));
   els.statsBtn.addEventListener("click", (e) => {
-    renderStats();
+    els.statsMode.textContent = state.mode === "daily" ? "Daily Challenge" : "Unlimited mode";
+    renderStats(state.mode, els.statsGrid, els.distChart);
     openModal(els.statsOverlay, e.currentTarget);
   });
   document.querySelectorAll("[data-close-modal]").forEach((btn) => {
@@ -564,10 +663,12 @@
     localStorage.setItem(LS_SEEN_HOWTO, "1");
   }
 
-  function renderStats() {
-    const s = loadStats();
+  // Fills a stats grid + guess-distribution chart. `highlight` is the number
+  // of guesses of the game just won, so its bar can be coloured.
+  function renderStats(mode, gridEl, distEl, highlight = null) {
+    const s = loadStats(mode);
     const winPct = s.played > 0 ? Math.round((s.won / s.played) * 100) : 0;
-    els.statsGrid.innerHTML = `
+    gridEl.innerHTML = `
       ${statBox(s.played, "Played")}
       ${statBox(winPct + "%", "Win rate")}
       ${statBox(s.currentStreak, "Streak")}
@@ -576,13 +677,14 @@
       ${statBox(avgGuesses(s), "Avg guesses")}
     `;
     const max = Math.max(1, ...s.distribution);
-    els.distChart.innerHTML = s.distribution
+    distEl.innerHTML = s.distribution
       .map((count, i) => {
         const pct = Math.round((count / max) * 100);
+        const current = highlight === i + 1 ? " current" : "";
         return `
         <div class="dist-row">
           <span class="dist-label">${i + 1}</span>
-          <div class="dist-bar-wrap"><div class="dist-bar" style="width:${count > 0 ? Math.max(pct, 10) : 0}%">${count > 0 ? count : ""}</div></div>
+          <div class="dist-bar-wrap"><div class="dist-bar${current}" style="width:${count > 0 ? Math.max(pct, 10) : 0}%">${count > 0 ? count : ""}</div></div>
         </div>`;
       })
       .join("");

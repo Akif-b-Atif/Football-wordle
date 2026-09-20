@@ -424,7 +424,7 @@ button { font-family: inherit; }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 .modal-wide { max-width: 540px; }
-.modal h2 { font-size: 22px; margin-bottom: 10px; }
+.modal h2 { font-size: 22px; margin-bottom: 10px; padding-right: 40px; } /* keep clear of the close button */
 .modal h3 {
   font-size: 13px;
   color: var(--pitch-mid);
@@ -524,10 +524,33 @@ button { font-family: inherit; }
 .stat-box .stat-label { font-size: 11px; text-transform: uppercase; color: var(--ink-soft); letter-spacing: 0.04em; }
 
 .dist-title { font-size: 14px; margin-top: 10px; }
+.stats-mode { margin: -4px 0 12px; font-size: 13px; color: var(--ink-soft); }
+
+/* game-over popup */
+#resultOverlay .reveal { display: flex; align-items: center; justify-content: flex-start; gap: 12px; margin: 8px 0 4px; }
+.share-note { font-size: 13px !important; color: var(--ink-soft); margin: 4px 0 8px !important; }
+.share-box {
+  margin: 0;
+  padding: 14px 16px;
+  background: #fff;
+  border: 2px solid var(--gray-cell);
+  border-radius: 10px;
+  /* Don't list emoji fonts here: they include wide digit/"#" glyphs that would
+     hijack the text. The browser picks an emoji font for the squares on its own. */
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 17px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: all;
+}
+.share-actions { display: flex; align-items: center; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
+.copy-status { font-size: 13px; font-weight: 600; color: var(--pitch-mid); }
 .dist-chart { display: flex; flex-direction: column; gap: 5px; margin-top: 10px; }
 .dist-row { display: flex; align-items: center; gap: 8px; font-family: "Space Mono", monospace; font-size: 12px; }
 .dist-label { width: 46px; flex: none; }
 .dist-bar-wrap { flex: 1; background: var(--gray-cell); border-radius: 4px; overflow: hidden; height: 18px; }
+.dist-bar.current { background: var(--amber); color: var(--ink); font-weight: 700; }
 .dist-bar { background: var(--green-cell); height: 100%; min-width: 8%; display: flex; align-items: center; justify-content: flex-end; padding-right: 6px; color: var(--green-cell-text); font-size: 11px; }
 
 /* ---------------------------------------------------------------------

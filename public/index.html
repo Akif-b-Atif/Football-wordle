@@ -154,11 +154,34 @@
   </div>
 </div>
 
+<!-- Game-over popup: result, shareable emoji grid, and stats including this game -->
+<div class="modal-overlay" id="resultOverlay" hidden>
+  <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="resultTitle">
+    <button class="modal-close" data-close-modal aria-label="Close">&times;</button>
+    <h2 id="resultTitle"></h2>
+    <div class="reveal" id="resultReveal"></div>
+
+    <h3>Share your game</h3>
+    <p class="share-note">Your colours only, with no guesses and no answer, so it's spoiler-free.</p>
+    <pre class="share-box" id="shareText" aria-label="Your result as emoji"></pre>
+    <div class="share-actions">
+      <button class="btn btn-primary" id="copyBtn" type="button">Copy result</button>
+      <span class="copy-status" id="copyStatus" role="status" aria-live="polite"></span>
+    </div>
+
+    <h3 id="resultStatsTitle">Statistics</h3>
+    <div class="stats-grid" id="resultStatsGrid"></div>
+    <h3 class="dist-title">Guess distribution</h3>
+    <div class="dist-chart" id="resultDistChart"></div>
+  </div>
+</div>
+
 <!-- Stats modal -->
 <div class="modal-overlay" id="statsOverlay" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="statsTitle">
     <button class="modal-close" data-close-modal>&times;</button>
     <h2 id="statsTitle">Statistics</h2>
+    <p class="stats-mode" id="statsMode"></p>
     <div class="stats-grid" id="statsGrid"></div>
     <h3 class="dist-title">Guess distribution</h3>
     <div class="dist-chart" id="distChart"></div>

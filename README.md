@@ -139,12 +139,28 @@ work (`cleaner.py` already sorts by `overall` descending).
 - Search ignores accents and punctuation (`mbappe` finds Mbappé) and lists
   better-known players first.
 - Each footballer can only be guessed once per game.
-- On loss, the hidden player's name, club, nationality, position, overall,
-  and photo are revealed.
-- Stats (played, win %, streak, guess distribution) and Daily Challenge
-  results are tracked in the browser's `localStorage` — no account or
-  database needed. Unlimited games don't affect the streak, matching how
-  Wordle-style dailies usually behave.
+- When a game ends (win or loss, Daily or Unlimited) a popup opens with the
+  answer, a **Wordle-style emoji summary** and a **Copy result** button, plus
+  your stats including the game you just finished. The summary shows only the
+  colours of each guess, never who you guessed or who the answer was:
+
+  ```
+  Footle #12 3/8
+
+  🟨⬛⬛⬛🟨🟨
+  🟩🟨🟨🟨🟩⬛
+  🟩🟩🟩🟩🟩🟩
+  ```
+
+  Closing the popup? The end card has a **Share & stats** button to reopen it.
+  The 📊 button in the header shows the stats only (no share box). Daily
+  puzzle numbers count from `LAUNCH_UTC` in `public/app.js`.
+- Stats (played, win %, streaks, guess distribution) are tracked in the
+  browser's `localStorage` — no account or database needed. Daily Challenge
+  and Unlimited each keep their own stats. The trade-off of no accounts:
+  stats live in one browser and reset if site data is cleared.
+- "How to play" opens automatically the first time someone visits (tracked
+  by `fw_seen_howto_v2` in `localStorage`).
 
 ## Environment variables
 
