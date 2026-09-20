@@ -239,7 +239,7 @@
     const playerCell = document.createElement("div");
     playerCell.className = "cell player-col";
     playerCell.innerHTML = `
-      ${fb.guessedPlayer.face_url ? `<img src="${fb.guessedPlayer.face_url}" alt="" loading="lazy" />` : ""}
+      ${faceImg(fb.guessedPlayer.face_url, fb.guessedPlayer.id, fb.guessedPlayer.short_name)}
       <span>${escapeHtml(fb.guessedPlayer.short_name)}</span>
     `;
     row.appendChild(playerCell);
@@ -320,7 +320,7 @@
       <h2>${won ? "Full time — you got it!" : "Full time — out of guesses"}</h2>
       <p>${won ? `Found in ${guessesUsed} guess${guessesUsed === 1 ? "" : "es"}.` : "Better luck next time."}</p>
       <div class="reveal">
-        ${reveal.face_url ? `<img src="${reveal.face_url}" alt="" />` : ""}
+        ${faceImg(reveal.face_url, reveal.id, reveal.short_name)}
         <div>
           <div class="reveal-name">${escapeHtml(reveal.long_name || reveal.short_name)}</div>
           <div class="reveal-sub">${escapeHtml(reveal.club_name)} · ${escapeHtml(reveal.nationality_name)} · ${escapeHtml(reveal.primary_position)} · OVR ${reveal.overall}</div>
@@ -361,6 +361,45 @@
       setStatus("Result copied to clipboard!");
     }
   }
+
+  // Player photos, with a three-step fallback so a failing image host never
+  // leaves a blank grey circle:
+  //   1. load straight from the CDN, sending no referrer (defeats simple
+  //      hotlink protection that rejects requests coming from other sites)
+  //   2. if that fails, ask our own server (/api/face/:id) to fetch it
+  //   3. if that fails too, show an initials badge
+  function faceImg(url, id, name) {
+    if (!url) return initialsBadge(name);
+    return `<img src="${escapeHtml(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-face-id="${escapeHtml(id)}" data-name="${escapeHtml(name)}" />`;
+  }
+
+  function initialsOf(name) {
+    const parts = String(name || "").replace(/[.\-']/g, " ").split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "?";
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+
+  function initialsBadge(name) {
+    return `<span class="face-fallback" aria-hidden="true">${escapeHtml(initialsOf(name))}</span>`;
+  }
+
+  // <img> error events don't bubble, so listen in the capture phase.
+  document.addEventListener(
+    "error",
+    (e) => {
+      const img = e.target;
+      if (!(img instanceof HTMLImageElement) || !img.dataset.faceId) return;
+      if (!img.dataset.proxied) {
+        img.dataset.proxied = "1";
+        img.removeAttribute("referrerpolicy");
+        img.src = `/api/face/${encodeURIComponent(img.dataset.faceId)}`;
+        return;
+      }
+      img.outerHTML = initialsBadge(img.dataset.name);
+    },
+    true
+  );
 
   function escapeHtml(str) {
     return String(str).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -432,7 +471,7 @@
         const already = state.guessedIds.has(p.id);
         return `
         <div class="suggestion-item ${already ? "disabled" : ""}" data-id="${p.id}">
-          ${p.face_url ? `<img src="${p.face_url}" alt="" loading="lazy" />` : ""}
+          ${faceImg(p.face_url, p.id, p.short_name)}
           <div>
             <div class="suggestion-name">${escapeHtml(p.short_name)}${already ? " (already guessed)" : ""}</div>
             <div class="suggestion-sub">${escapeHtml(p.club_name)} · ${escapeHtml(p.nationality_name)}</div>

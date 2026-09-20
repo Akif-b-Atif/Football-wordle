@@ -207,6 +207,17 @@ button { font-family: inherit; }
   background: #ddd8c8;
 }
 .suggestion-name { font-weight: 600; font-size: 14px; }
+
+/* initials badge shown when a player photo can't be loaded */
+.face-fallback {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  border-radius: 50%;
+  background: var(--pitch-mid); color: var(--chalk);
+  font-family: "Oswald", sans-serif; font-weight: 600; letter-spacing: 0.03em;
+}
+.suggestion-item .face-fallback { width: 32px; height: 32px; font-size: 12px; }
+.player-col .face-fallback { width: 30px; height: 30px; font-size: 11px; }
+.reveal .face-fallback { width: 64px; height: 64px; font-size: 22px; border: 3px solid var(--amber); }
 .suggestion-sub { font-size: 12px; color: var(--ink-soft); }
 .suggestion-item.disabled { opacity: 0.45; cursor: not-allowed; }
 .suggestion-empty { padding: 12px 14px; color: var(--ink-soft); font-size: 13px; }

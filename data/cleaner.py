@@ -2,11 +2,16 @@
 Cleans the full FIFA-style export (players_raw.csv) down to the players.csv
 that the game actually loads.
 
+This script is the ONE place data gets prepared: server.js reads players.csv
+as-is. players.csv contains exactly the columns listed in OUTPUT_COLUMNS
+below, every one of which the game uses, and nothing else.
+
 Run from anywhere:   python data/cleaner.py
 
 Data note: the export is the FIFA 22 database, so every club, rating, age and
 height in it is "as of 2022". The game shows a disclaimer saying so.
 """
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -26,14 +31,14 @@ BIG_5_LEAGUES = [
     "Italian Serie A",
 ]
 
-# Only what the game reads. (weak_foot, skill_moves and dob were dropped:
-# weak foot / skill moves are FIFA-game ratings most fans can't reason about,
-# and dob was never used because `age` already covers it.)
-COLUMNS_TO_KEEP = [
+# Raw columns we read from the export. (weak_foot, skill_moves and dob were
+# dropped: weak foot / skill moves are FIFA-game ratings most fans can't reason
+# about, and dob is redundant with `age`.)
+RAW_COLUMNS = [
     "sofifa_id",
     "short_name",
     "long_name",
-    "player_positions",
+    "player_positions",   # only the first (primary) position is used, see below
     "overall",
     "age",
     "height_cm",
@@ -44,17 +49,47 @@ COLUMNS_TO_KEEP = [
     "player_face_url",
 ]
 
-# Columns a row must have to be playable at all.
-REQUIRED_COLUMNS = [
+# The exact schema of players.csv, in order. Each column is read by server.js:
+#   sofifa_id             unique id
+#   short_name, long_name display + search
+#   primary_position      Pos clue
+#   overall, age          OVR / Age clues
+#   height_cm             Height clue
+#   club_name             Club clue
+#   league_name           Club clue turns yellow on a matching league
+#   nationality_name      Nation clue
+#   nationality_continent Nation clue turns yellow on a matching continent
+#   player_traits         Shared Traits clue
+#   player_face_url       player photo
+OUTPUT_COLUMNS = [
     "sofifa_id",
     "short_name",
-    "player_positions",
+    "long_name",
+    "primary_position",
     "overall",
     "age",
     "height_cm",
     "club_name",
     "league_name",
     "nationality_name",
+    "nationality_continent",
+    "player_traits",
+    "player_face_url",
+]
+
+# Columns a row must have to be playable at all (traits may legitimately be empty).
+REQUIRED_COLUMNS = [
+    "sofifa_id",
+    "short_name",
+    "long_name",
+    "primary_position",
+    "overall",
+    "age",
+    "height_cm",
+    "club_name",
+    "league_name",
+    "nationality_name",
+    "player_face_url",
 ]
 
 # -----------------------------
@@ -136,7 +171,7 @@ print(f"After league filter: {len(df):,}")
 # -----------------------------
 # Keep only required columns
 # -----------------------------
-df = df[COLUMNS_TO_KEEP].copy()
+df = df[RAW_COLUMNS].copy()
 
 # -----------------------------
 # Remove duplicate players
@@ -145,6 +180,42 @@ df = df[COLUMNS_TO_KEEP].copy()
 df = df.drop_duplicates(subset="sofifa_id")
 
 print(f"After removing duplicates: {len(df):,}")
+
+# -----------------------------
+# Primary position
+# player_positions is a list ("LW, RW, ST"); the game only ever uses the first
+# one, so keep just that.
+# -----------------------------
+df["primary_position"] = (
+    df["player_positions"].astype("string").str.split(",").str[0].str.strip().str.upper()
+)
+
+
+# -----------------------------
+# Traits
+# Raw data has "(AI)" variants of traits (e.g. "Flair (AI)") and sometimes both
+# the plain and "(AI)" version of the same trait. Strip the suffix and
+# de-duplicate, keeping order.
+# -----------------------------
+def clean_traits(value):
+    if pd.isna(value):
+        return ""
+    seen, out = set(), []
+    for trait in re.sub(r"\(ai\)", "", str(value), flags=re.IGNORECASE).split(","):
+        trait = trait.strip()
+        if trait and trait not in seen:
+            seen.add(trait)
+            out.append(trait)
+    return ", ".join(out)
+
+
+df["player_traits"] = df["player_traits"].map(clean_traits)
+
+# -----------------------------
+# Trim stray whitespace on text columns
+# -----------------------------
+for col in ["short_name", "long_name", "club_name", "league_name", "nationality_name"]:
+    df[col] = df[col].astype("string").str.strip()
 
 # -----------------------------
 # Drop rows the game can't use
@@ -168,10 +239,11 @@ if unmapped:
 
 df["height_cm"] = df["height_cm"].astype(int)
 
-# Same column order the game expects, continent next to nationality.
-ordered = COLUMNS_TO_KEEP.copy()
-ordered.insert(ordered.index("nationality_name") + 1, "nationality_continent")
-df = df[ordered]
+# -----------------------------
+# Final schema: exactly the columns the game uses, no more, no less
+# -----------------------------
+df = df[OUTPUT_COLUMNS]
+assert list(df.columns) == OUTPUT_COLUMNS
 
 # -----------------------------
 # Sort

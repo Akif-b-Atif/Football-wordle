@@ -25,8 +25,12 @@ and shared gameplay traits as clues.
   down from a full FIFA-style export (`data/players_raw.csv`, ~19,240
   players) by `data/cleaner.py`. The cleaner keeps only Big-5-league rows,
   drops irrelevant columns, de-duplicates by `sofifa_id`, drops incomplete
-  rows, adds a `nationality_continent` column (see "Continents" below), and
-  sorts the result by `overall` (descending) then `short_name`. Every player in this
+  rows, reduces the position list to a single `primary_position`, strips the
+  "(AI)" suffix from and de-duplicates traits, adds a `nationality_continent`
+  column (see "Continents" below), and sorts the result by `overall`
+  (descending) then `short_name`. The cleaner is the one place data gets
+  prepared, and it asserts its output is exactly the columns listed below, so
+  `players.csv` never carries anything the game doesn't use. Every player in this
   file is a valid **guess** — see "Answer pool" below for which of them can
   actually be the hidden player.
 
@@ -73,7 +77,7 @@ leave populated or blank:
 |---|---|
 | `sofifa_id` | unique ID, de-duplication |
 | `short_name`, `long_name` | display name, search |
-| `player_positions` | primary position + position-group (yellow/green logic) |
+| `primary_position` | Pos column + position-group (yellow/green logic) |
 | `overall` | Overall Rating column |
 | `age` | Age column |
 | `height_cm` | Height column |
@@ -81,14 +85,14 @@ leave populated or blank:
 | `league_name` | Club column turns yellow when the league matches |
 | `nationality_name` | Nationality column |
 | `nationality_continent` | Nationality column turns yellow when the continent matches (optional — without it that clue is never yellow) |
-| `player_traits` | Shared Traits column |
-| `player_face_url` | player photo in search results / results table |
+| `player_traits` | Shared Traits column (comma-separated; may be empty) |
+| `player_face_url` | player photo (see "Player photos" below) |
 
 **Data cleaning applied automatically at startup** (per the product spec),
 on top of what `cleaner.py` already did:
 - Duplicate `sofifa_id` rows are dropped (first occurrence wins).
-- Rows missing any required field above (all but `long_name`, `nationality_continent`,
-  `player_traits` and `player_face_url`) are excluded — from *both* being
+- Rows missing any required field above (all but `nationality_continent`, `player_traits`
+  and `player_face_url`) are excluded — from *both* being
   guessable and from being answer-eligible.
 - Rows whose `short_name` looks like a generic placeholder (e.g. `"Player 4"`)
   are excluded.
@@ -154,3 +158,14 @@ production is `JWT_SECRET`.
 | `DATA_FILE` | `./data/players.csv` | Path to the player CSV to load at startup. |
 | `ANSWER_POOL_SIZE` | `182` | How many of the top-rated players (by the CSV's sort order) are eligible to be the hidden player. Doesn't affect what's guessable. |
 | `ALLOW_ORIGIN` | *(unset)* | Only needed if you host the frontend separately from the API. |
+
+## Player photos
+
+Photos come from the sofifa CDN (`player_face_url`). To survive that host
+refusing or blocking requests, the frontend tries, in order:
+
+1. the CDN directly, sending no `Referer` (avoids simple hotlink protection);
+2. `/api/face/:id`, where this server fetches the image itself and serves it
+   from your own origin (only CDN URLs from `players.csv` are ever fetched;
+   responses are cached);
+3. an initials badge, so a failed image never shows as an empty grey circle.

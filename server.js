@@ -50,7 +50,7 @@ if (JWT_SECRET === "dev-secret-change-me") {
 const REQUIRED_FIELDS = [
   "sofifa_id",
   "short_name",
-  "player_positions",
+  "primary_position",
   "overall",
   "age",
   "height_cm",
@@ -108,20 +108,18 @@ function loadPool() {
     // filter out obvious placeholder / generic records
     if (/^player\s*\d*$/i.test(row.short_name.trim())) continue;
 
+    // data/cleaner.py already stripped "(AI)" variants and de-duplicated traits
     const traits = (row.player_traits || "")
       .split(",")
-      .map((t) => t.replace(/\(ai\)/gi, "").trim())
+      .map((t) => t.trim())
       .filter(Boolean);
-
-    const positions = row.player_positions.split(",").map((p) => p.trim().toUpperCase());
 
     seenIds.add(id);
     pool.push({
       id,
       short_name: row.short_name.trim(),
       long_name: (row.long_name || row.short_name).trim(),
-      primary_position: positions[0],
-      all_positions: positions,
+      primary_position: row.primary_position.trim().toUpperCase(),
       overall: parseInt(row.overall, 10),
       age: parseInt(row.age, 10),
       height_cm: parseInt(row.height_cm, 10),
@@ -451,6 +449,46 @@ app.post("/api/game/state", (req, res) => {
     history,
     reveal: gameOver ? revealOf(hidden) : undefined,
   });
+});
+
+// Player photo fallback. The browser first tries the sofifa CDN directly; if
+// that fails (hotlink protection, blocked host, ...) the frontend asks here
+// instead, and we fetch the image server-side and serve it from our own
+// origin. Only URLs on the CDN host taken from our own data are ever fetched
+// (never anything the client supplies), and results are cached.
+const FACE_HOST = /^https:\/\/cdn\.sofifa\.net\//;
+const FACE_CACHE_MAX = 500;
+const faceCache = new Map(); // id -> { type, body }
+
+app.get("/api/face/:id", async (req, res) => {
+  const player = BY_ID.get(req.params.id);
+  if (!player || !player.face_url || !FACE_HOST.test(player.face_url)) {
+    return res.status(404).end();
+  }
+
+  try {
+    let entry = faceCache.get(player.id);
+    if (!entry) {
+      const upstream = await fetch(player.face_url, {
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; Footle/1.0)", Accept: "image/*" },
+        signal: AbortSignal.timeout(6000),
+      });
+      const type = upstream.headers.get("content-type") || "";
+      if (!upstream.ok || !type.startsWith("image/")) return res.status(404).end();
+
+      const body = Buffer.from(await upstream.arrayBuffer());
+      if (body.length === 0 || body.length > 500_000) return res.status(404).end();
+
+      entry = { type, body };
+      if (faceCache.size >= FACE_CACHE_MAX) faceCache.delete(faceCache.keys().next().value);
+      faceCache.set(player.id, entry);
+    }
+    res.set("Content-Type", entry.type);
+    res.set("Cache-Control", "public, max-age=604800, s-maxage=604800");
+    res.send(entry.body);
+  } catch {
+    res.status(404).end();
+  }
 });
 
 app.use(express.static(path.join(__dirname, "public")));
