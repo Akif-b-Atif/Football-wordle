@@ -63,6 +63,7 @@ const REQUIRED_FIELDS = [
 // Lets people type names on a plain keyboard.
 function normalizeText(str) {
   return String(str)
+    .replace(/[\u00ad\u200b-\u200d\u2060\ufeff]/g, "") // invisible characters (soft hyphens etc.)
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()

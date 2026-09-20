@@ -212,10 +212,12 @@ def clean_traits(value):
 df["player_traits"] = df["player_traits"].map(clean_traits)
 
 # -----------------------------
-# Trim stray whitespace on text columns
+# Clean text columns: drop invisible characters (e.g. the soft hyphen hiding
+# inside "Guðmunds\u00adson", which splits the word for search) and trim whitespace
 # -----------------------------
+INVISIBLE_CHARS = "[\u00ad\u200b-\u200d\u2060\ufeff]"
 for col in ["short_name", "long_name", "club_name", "league_name", "nationality_name"]:
-    df[col] = df[col].astype("string").str.strip()
+    df[col] = df[col].astype("string").str.replace(INVISIBLE_CHARS, "", regex=True).str.strip()
 
 # -----------------------------
 # Drop rows the game can't use

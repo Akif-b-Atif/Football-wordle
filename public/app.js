@@ -17,9 +17,19 @@
     endTimer: null,
   };
 
+  // On phones we close the keyboard after each guess so the new row of clues
+  // isn't hidden behind it; on laptops we keep the search box focused.
+  const coarsePointer = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+
   const els = {
     guessInput: document.getElementById("guessInput"),
+    searchWrap: document.getElementById("searchWrap"),
+    clearBtn: document.getElementById("clearBtn"),
     suggestions: document.getElementById("suggestions"),
+    pips: document.getElementById("pips"),
+    emptyState: document.getElementById("emptyState"),
+    emptyHowTo: document.getElementById("emptyHowTo"),
+    board: document.getElementById("board"),
     guessCounter: document.getElementById("guessCounter"),
     statusMsg: document.getElementById("statusMsg"),
     resultsBody: document.getElementById("resultsBody"),
@@ -156,6 +166,9 @@
     state.result = null;
     clearTimeout(state.endTimer);
     els.resultsBody.innerHTML = "";
+    els.board.hidden = true;
+    els.emptyState.hidden = false;
+    els.searchWrap.hidden = false;
     els.endPanel.hidden = true;
     els.statusMsg.textContent = "";
     els.guessInput.value = "";
@@ -164,7 +177,14 @@
   }
 
   function updateCounter(used) {
-    els.guessCounter.textContent = `${used} / ${state.maxGuesses} guesses`;
+    els.guessCounter.textContent = `${used} of ${state.maxGuesses} guesses`;
+    if (els.pips.children.length !== state.maxGuesses) {
+      els.pips.innerHTML = Array.from({ length: state.maxGuesses }, () => `<span class="pip"></span>`).join("");
+    }
+    [...els.pips.children].forEach((pip, i) => {
+      pip.classList.toggle("used", i < used);
+      pip.classList.remove("win");
+    });
   }
 
   async function submitGuess(playerId) {
@@ -180,7 +200,7 @@
       localStorage.setItem(tokenStorageKey(state.mode), data.token);
       state.guessedIds.add(playerId);
       state.history.push(data.feedback);
-      appendRow(data.feedback);
+      appendRow(data.feedback, { index: state.history.length, animate: true });
       updateCounter(data.guessesUsed);
       setStatus("");
 
@@ -194,7 +214,10 @@
       setStatus(err.message);
     } finally {
       els.guessInput.disabled = state.gameOver;
-      if (!state.gameOver) els.guessInput.focus();
+      if (!state.gameOver) {
+        if (coarsePointer) els.guessInput.blur();
+        else els.guessInput.focus();
+      }
     }
   }
 
@@ -241,42 +264,57 @@
 
   function renderHistory() {
     els.resultsBody.innerHTML = "";
-    state.history.forEach(appendRow);
+    state.history.forEach((fb, i) => appendRow(fb, { index: i + 1 }));
   }
 
-  function appendRow(fb) {
+  // One guess = one card of clue tiles. New rows go on top, right under the
+  // search box, so the latest clues are always what you see first.
+  function appendRow(fb, { index = state.history.length, animate = false } = {}) {
+    els.emptyState.hidden = true;
+    els.board.hidden = false;
+
     const row = document.createElement("div");
-    row.className = "result-row";
+    row.className = `result-row${animate ? " is-new" : ""}`;
 
     const playerCell = document.createElement("div");
-    playerCell.className = "cell player-col";
+    playerCell.className = "player-col";
     playerCell.innerHTML = `
       ${faceImg(fb.guessedPlayer.face_url, fb.guessedPlayer.id, fb.guessedPlayer.short_name)}
-      <span>${escapeHtml(fb.guessedPlayer.short_name)}</span>
+      <span class="player-name">${escapeHtml(fb.guessedPlayer.short_name)}</span>
+      <span class="guess-no">Guess ${index}</span>
     `;
     row.appendChild(playerCell);
 
-    row.appendChild(
-      makeResultCell(fb.nationality.value, fb.nationality.result, DESCRIBE.nationality[fb.nationality.result], fb.nationality.continent)
-    );
-    row.appendChild(makeResultCell(fb.club.value, fb.club.result, DESCRIBE.club[fb.club.result], fb.club.league));
-    row.appendChild(makeResultCell(fb.position.value, fb.position.result, DESCRIBE.position[fb.position.result]));
-    row.appendChild(makeArrowCell(fb.age, describeNumeric("age", fb.age)));
-    row.appendChild(makeArrowCell(fb.overall, describeNumeric("overall", fb.overall)));
-    row.appendChild(makeArrowCell(fb.height, describeNumeric("height", fb.height)));
+    const n = fb.nationality, c = fb.club, pos = fb.position;
+    row.appendChild(makeResultCell("nation", "Nation", n.value, n.result, DESCRIBE.nationality[n.result], n.continent));
+    row.appendChild(makeResultCell("club", "Club", c.value, c.result, DESCRIBE.club[c.result], c.league));
+    row.appendChild(makeResultCell("pos", "Pos", pos.value, pos.result, DESCRIBE.position[pos.result]));
+    row.appendChild(makeArrowCell("age", "Age", fb.age, describeNumeric("age", fb.age)));
+    row.appendChild(makeArrowCell("overall", "OVR", fb.overall, describeNumeric("overall", fb.overall)));
+    row.appendChild(makeArrowCell("height", "Height", fb.height, describeNumeric("height", fb.height)));
     row.appendChild(makeTraitsCell(fb.traits.shared));
 
     els.resultsBody.prepend(row); // most recent guess on top
   }
 
+  function screenReaderNote(description) {
+    const sr = document.createElement("span");
+    sr.className = "sr-only";
+    sr.textContent = `: ${description}`;
+    return sr;
+  }
+
   // `sub` is a small context line under the value (continent under a nation,
-  // league under a club) so you can see *why* a cell is yellow.
-  function makeResultCell(value, result, description, sub) {
+  // league under a club) so you can see *why* a tile is yellow.
+  // `label` shows above the value on phones, where there's no header row.
+  function makeResultCell(kind, label, value, result, description, sub) {
     const div = document.createElement("div");
-    div.className = `cell result-cell ${resultClass(result)}${sub ? " stacked" : ""}`;
+    div.className = `result-cell cell-${kind} ${resultClass(result)}`;
+    div.dataset.label = label;
     div.title = description;
 
     const main = document.createElement("span");
+    main.className = "val";
     main.textContent = value == null ? "—" : value;
     div.appendChild(main);
 
@@ -286,33 +324,31 @@
       subEl.textContent = sub;
       div.appendChild(subEl);
     }
-
-    const sr = document.createElement("span");
-    sr.className = "sr-only";
-    sr.textContent = `: ${description}`;
-    div.appendChild(sr);
+    div.appendChild(screenReaderNote(description));
     return div;
   }
 
   // fb = { value, result: green|yellow|gray, arrow: up|down|null }
-  function makeArrowCell(fb, description) {
+  function makeArrowCell(kind, label, fb, description) {
     const div = document.createElement("div");
     const arrowCls = fb.arrow ? ` arrow-${fb.arrow}` : "";
-    div.className = `cell result-cell ${resultClass(fb.result)}${arrowCls}`;
+    div.className = `result-cell cell-${kind} ${resultClass(fb.result)}${arrowCls}`;
+    div.dataset.label = label;
     div.title = description;
-    div.textContent = fb.value == null ? "—" : fb.value;
 
-    const sr = document.createElement("span");
-    sr.className = "sr-only";
-    sr.textContent = `: ${description}`;
-    div.appendChild(sr);
+    const main = document.createElement("span");
+    main.className = "val";
+    main.textContent = fb.value == null ? "—" : fb.value;
+    div.appendChild(main);
+    div.appendChild(screenReaderNote(description));
     return div;
   }
 
   function makeTraitsCell(shared) {
     const div = document.createElement("div");
-    div.className = "cell traits-col";
+    div.className = "traits-col";
     if (!shared || shared.length === 0) {
+      div.classList.add("is-empty");
       div.innerHTML = `<span class="trait-none">No shared traits</span>`;
     } else {
       div.innerHTML = shared.map((t) => `<span class="trait-chip">${escapeHtml(t)}</span>`).join("");
@@ -322,6 +358,9 @@
 
   function showEndPanel(won, reveal, guessesUsed, { autoOpenResult = false } = {}) {
     state.result = { won, reveal, guessesUsed };
+    els.searchWrap.hidden = true;
+    hideSuggestions();
+    if (won) els.pips.children[guessesUsed - 1]?.classList.add("win");
     els.endPanel.hidden = false;
     const card = els.endCard;
     card.className = `end-card ${won ? "win" : "lose"}`;
@@ -507,17 +546,45 @@
   // Autocomplete
   // -------------------------------------------------------------------
   let searchTimer = null;
+  let searchSeq = 0; // lets us ignore out-of-order responses
   let activeIndex = -1;
   let currentResults = [];
 
+  function syncClearButton() {
+    els.clearBtn.hidden = els.guessInput.value.length === 0;
+  }
+
   els.guessInput.addEventListener("input", () => {
+    syncClearButton();
     const q = els.guessInput.value.trim();
     clearTimeout(searchTimer);
     if (q.length < 2) {
+      searchSeq++; // drop any request still in flight
       hideSuggestions();
       return;
     }
-    searchTimer = setTimeout(() => runSearch(q), 180);
+    searchTimer = setTimeout(() => runSearch(q), 150);
+  });
+
+  els.clearBtn.addEventListener("click", () => {
+    els.guessInput.value = "";
+    syncClearButton();
+    hideSuggestions();
+    els.guessInput.focus();
+  });
+
+  // Keep focus in the search box while tapping a suggestion. Otherwise the
+  // input blurs first, the phone keyboard collapses, the layout jumps and the
+  // tap can land on the wrong row.
+  els.suggestions.addEventListener("pointerdown", (e) => e.preventDefault());
+
+  // "/" jumps to the search box on a keyboard, like most sites.
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (/^(input|textarea|select)$/i.test(document.activeElement.tagName)) return;
+    if (document.documentElement.classList.contains("modal-open") || els.searchWrap.hidden) return;
+    e.preventDefault();
+    els.guessInput.focus();
   });
 
   els.guessInput.addEventListener("keydown", (e) => {
@@ -543,13 +610,24 @@
   });
 
   function highlightActive(items) {
-    items.forEach((el, i) => el.classList.toggle("active", i === activeIndex));
-    if (items[activeIndex]) items[activeIndex].scrollIntoView({ block: "nearest" });
+    items.forEach((el, i) => {
+      el.classList.toggle("active", i === activeIndex);
+      el.setAttribute("aria-selected", i === activeIndex ? "true" : "false");
+    });
+    const active = items[activeIndex];
+    if (active) {
+      active.scrollIntoView({ block: "nearest" });
+      els.guessInput.setAttribute("aria-activedescendant", active.id);
+    } else {
+      els.guessInput.removeAttribute("aria-activedescendant");
+    }
   }
 
   async function runSearch(q) {
+    const seq = ++searchSeq;
     try {
       const data = await api(`/api/search?q=${encodeURIComponent(q)}`);
+      if (seq !== searchSeq) return; // a newer search has started
       currentResults = data.results || [];
       renderSuggestions(currentResults);
     } catch {
@@ -560,15 +638,16 @@
   function renderSuggestions(results) {
     activeIndex = -1;
     if (results.length === 0) {
-      els.suggestions.innerHTML = `<div class="suggestion-empty">No players found</div>`;
+      els.suggestions.innerHTML = `<div class="suggestion-empty">No players found. Check the spelling, or try a surname.</div>`;
       els.suggestions.hidden = false;
+      els.guessInput.setAttribute("aria-expanded", "true");
       return;
     }
     els.suggestions.innerHTML = results
       .map((p) => {
         const already = state.guessedIds.has(p.id);
         return `
-        <div class="suggestion-item ${already ? "disabled" : ""}" data-id="${p.id}">
+        <div class="suggestion-item ${already ? "disabled" : ""}" data-id="${p.id}" id="opt-${p.id}" role="option" aria-selected="false"${already ? ' aria-disabled="true"' : ""}>
           ${faceImg(p.face_url, p.id, p.short_name)}
           <div>
             <div class="suggestion-name">${escapeHtml(p.short_name)}${already ? " (already guessed)" : ""}</div>
@@ -578,12 +657,14 @@
       })
       .join("");
     els.suggestions.hidden = false;
+    els.guessInput.setAttribute("aria-expanded", "true");
 
     els.suggestions.querySelectorAll(".suggestion-item:not(.disabled)").forEach((el) => {
       el.addEventListener("click", () => {
         const id = el.getAttribute("data-id");
         hideSuggestions();
         els.guessInput.value = "";
+        syncClearButton();
         submitGuess(id);
       });
     });
@@ -592,6 +673,8 @@
   function hideSuggestions() {
     els.suggestions.hidden = true;
     els.suggestions.innerHTML = "";
+    els.guessInput.setAttribute("aria-expanded", "false");
+    els.guessInput.removeAttribute("aria-activedescendant");
     activeIndex = -1;
   }
 
@@ -622,19 +705,36 @@
   // -------------------------------------------------------------------
   let lastFocused = null;
 
+  // Focus rings are for keyboard users. Track how the last interaction
+  // happened so touch and mouse users don't get a ring around whatever
+  // button we hand focus back to.
+  let usingKeyboard = false;
+  document.addEventListener("keydown", () => (usingKeyboard = true), true);
+  document.addEventListener("pointerdown", () => (usingKeyboard = false), true);
+
   function openModal(overlay, trigger) {
     lastFocused = trigger || document.activeElement;
     overlay.hidden = false;
+    document.documentElement.classList.add("modal-open");
+    // Move focus into the dialog (required for screen readers / keyboards).
+    // Keyboard users land on the close button; everyone else on the dialog
+    // itself, which draws no ring.
+    const modal = overlay.querySelector(".modal");
+    modal.setAttribute("tabindex", "-1");
     const closeBtn = overlay.querySelector(".modal-close");
-    if (closeBtn) closeBtn.focus();
+    (usingKeyboard && closeBtn ? closeBtn : modal).focus({ preventScroll: true });
   }
   function closeModal(overlay) {
     if (overlay.hidden) return;
     overlay.hidden = true;
-    if (lastFocused && typeof lastFocused.focus === "function") lastFocused.focus();
+    if (!document.querySelector(".modal-overlay:not([hidden])")) {
+      document.documentElement.classList.remove("modal-open");
+    }
+    if (usingKeyboard && lastFocused && typeof lastFocused.focus === "function") lastFocused.focus();
   }
 
   els.howToBtn.addEventListener("click", (e) => openModal(els.howToOverlay, e.currentTarget));
+  els.emptyHowTo.addEventListener("click", (e) => openModal(els.howToOverlay, e.currentTarget));
   els.statsBtn.addEventListener("click", (e) => {
     els.statsMode.textContent = state.mode === "daily" ? "Daily Challenge" : "Unlimited mode";
     renderStats(state.mode, els.statsGrid, els.distChart);

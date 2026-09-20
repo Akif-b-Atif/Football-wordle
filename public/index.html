@@ -2,87 +2,127 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Footle — Daily Football Guessing Game</title>
 <meta name="description" content="Guess the hidden footballer in 8 tries using nationality, club, position, age and more as clues. A new Footle every day." />
-<meta name="theme-color" content="#0b3d2e" />
+<meta name="theme-color" content="#0a2e23" />
 <meta property="og:title" content="Footle — Daily Football Guessing Game" />
 <meta property="og:description" content="Guess the hidden footballer in 8 tries. A new challenge every day." />
 <meta property="og:type" content="website" />
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚽</text></svg>" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%230a2e23'/%3E%3Ccircle cx='16' cy='16' r='11' fill='%23f5f3ec'/%3E%3Cpath d='M16 10.2l4.6 3.3-1.8 5.4h-5.6l-1.8-5.4z' fill='%230f2019'/%3E%3C/svg%3E" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
+<a class="skip-link" href="#main">Skip to the game</a>
 <div class="stripes-bg" aria-hidden="true"></div>
 
-<header class="board">
-  <div class="board-inner">
+<header class="topbar">
+  <div class="topbar-inner">
     <div class="brand">
-      <span class="brand-mark">⚽</span>
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <defs><clipPath id="ballClip"><circle cx="16" cy="16" r="14.6"/></clipPath></defs>
+        <circle cx="16" cy="16" r="15" fill="#f5f3ec" stroke="#f2a73b" stroke-width="2"/>
+        <g clip-path="url(#ballClip)" fill="#0f2019">
+          <path d="M16.00 11.10 L20.66 14.49 L18.88 19.96 L13.12 19.96 L11.34 14.49z"/>
+          <path d="M16.00 6.60 L11.63 3.42 L13.30 -1.72 L18.70 -1.72 L20.37 3.42z"/>
+          <path d="M24.94 13.10 L26.61 7.95 L32.02 7.95 L33.69 13.10 L29.31 16.27z"/>
+          <path d="M21.53 23.60 L26.93 23.60 L28.60 28.75 L24.23 31.93 L19.85 28.75z"/>
+          <path d="M10.47 23.60 L12.15 28.75 L7.77 31.93 L3.40 28.75 L5.07 23.60z"/>
+          <path d="M7.06 13.10 L2.69 16.27 L-1.69 13.10 L-0.02 7.95 L5.39 7.95z"/>
+        </g>
+        <path d="M16.00 11.10L16.00 6.40 M20.66 14.49L25.13 13.03 M18.88 19.96L21.64 23.77 M13.12 19.96L10.36 23.77 M11.34 14.49L6.87 13.03" stroke="#0f2019" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+      </svg>
       <div class="brand-text">
-        <h1>FOOTLE</h1>
-        <span class="brand-sub">the daily footballer guessing game</span>
+        <h1>Footle</h1>
+        <span class="brand-sub">The daily footballer guessing game</span>
       </div>
     </div>
-    <nav class="board-actions">
-      <button class="icon-btn" id="howToPlayBtn" title="How to play" aria-label="How to play">?</button>
-      <button class="icon-btn" id="statsBtn" title="Statistics" aria-label="Statistics">📊</button>
+
+    <div class="mode-tabs" role="tablist" aria-label="Game mode">
+      <button class="mode-tab active" data-mode="daily" role="tab" aria-selected="true">Daily Challenge</button>
+      <button class="mode-tab" data-mode="unlimited" role="tab" aria-selected="false">Unlimited</button>
+    </div>
+
+    <nav class="topbar-actions" aria-label="Help and statistics">
+      <button class="icon-btn" id="howToPlayBtn" title="How to play" aria-label="How to play">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.25"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.6 2.2c-.8.4-1.2.9-1.2 1.8"/><circle cx="12" cy="17" r=".6" fill="currentColor"/></svg>
+      </button>
+      <button class="icon-btn" id="statsBtn" title="Statistics" aria-label="Statistics">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V11M12 20V4M19 20v-6"/></svg>
+      </button>
     </nav>
-  </div>
-  <div class="mode-tabs" role="tablist" aria-label="Game mode">
-    <button class="mode-tab active" data-mode="daily" role="tab" aria-selected="true">Daily Challenge</button>
-    <button class="mode-tab" data-mode="unlimited" role="tab" aria-selected="false">Unlimited</button>
   </div>
 </header>
 
-<main class="pitch">
+<main class="pitch" id="main">
 
-  <section class="guess-panel">
-    <div class="search-wrap">
+  <section class="guess-panel" aria-label="Make a guess">
+    <div class="search-wrap" id="searchWrap">
+      <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
       <input
         id="guessInput"
         type="text"
+        role="combobox"
+        aria-expanded="false"
+        aria-controls="suggestions"
+        aria-autocomplete="list"
+        inputmode="search"
+        enterkeyhint="go"
         autocomplete="off"
+        autocapitalize="off"
+        autocorrect="off"
         spellcheck="false"
-        placeholder="Type a footballer's name…"
+        placeholder="Search for a player"
         aria-label="Guess a footballer"
       />
-      <div id="suggestions" class="suggestions" hidden></div>
+      <button type="button" class="clear-btn" id="clearBtn" aria-label="Clear search" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"/></svg>
+      </button>
+      <div id="suggestions" class="suggestions" role="listbox" aria-label="Matching players" hidden></div>
     </div>
+
     <div class="guess-meta">
-      <span id="guessCounter">0 / 8 guesses</span>
+      <div class="pips" id="pips" aria-hidden="true"></div>
+      <span id="guessCounter" class="guess-counter">0 of 8 guesses</span>
       <span id="statusMsg" class="status-msg" role="status" aria-live="polite"></span>
     </div>
+
     <ul class="mini-legend" aria-label="Colour key">
       <li><span class="swatch green"></span>Exact</li>
       <li><span class="swatch yellow"></span>Close</li>
       <li><span class="swatch gray"></span>No match</li>
-      <li><span class="swatch arrow">▲▼</span>Answer is higher / lower</li>
+      <li><span class="swatch arrow">▲▼</span>Higher / lower</li>
     </ul>
-  </section>
-
-  <section class="board-scroll" aria-label="Guess results">
-    <div class="results-table" id="resultsTable">
-      <div class="results-head" id="resultsHead">
-        <div class="cell head-cell player-col">Player</div>
-        <div class="cell head-cell">Nation</div>
-        <div class="cell head-cell">Club</div>
-        <div class="cell head-cell">Pos</div>
-        <div class="cell head-cell">Age</div>
-        <div class="cell head-cell">OVR</div>
-        <div class="cell head-cell">Height</div>
-        <div class="cell head-cell traits-col">Shared Traits</div>
-      </div>
-      <div class="results-body" id="resultsBody"></div>
-    </div>
   </section>
 
   <section id="endPanel" class="end-panel" hidden>
     <div class="end-card" id="endCard"></div>
+  </section>
+
+  <section id="emptyState" class="empty-state">
+    <h2>Who's the mystery player?</h2>
+    <p>Guess anyone from the Premier League, La Liga, Bundesliga, Serie A or Ligue 1. Every guess lights up six clues to narrow it down.</p>
+    <button type="button" class="btn btn-ghost" id="emptyHowTo">How to play</button>
+  </section>
+
+  <section class="board-scroll" id="board" aria-label="Guess results" hidden>
+    <div class="results-table" id="resultsTable">
+      <div class="results-head" id="resultsHead" aria-hidden="true">
+        <div class="head-cell">Player</div>
+        <div class="head-cell">Nation</div>
+        <div class="head-cell">Club</div>
+        <div class="head-cell">Pos</div>
+        <div class="head-cell">Age</div>
+        <div class="head-cell">OVR</div>
+        <div class="head-cell">Height</div>
+        <div class="head-cell">Shared traits</div>
+      </div>
+      <div class="results-body" id="resultsBody"></div>
+    </div>
   </section>
 
 </main>
@@ -91,6 +131,8 @@
   <p class="disclaimer">All player info (clubs, ages, ratings, heights) is as of 2022 and may be out of date.</p>
   <p>New Daily Challenge every day at 00:00 UTC.</p>
 </footer>
+
+<noscript><p class="noscript">Footle needs JavaScript to run. Please enable it and reload.</p></noscript>
 
 <!-- How to play modal -->
 <div class="modal-overlay" id="howToOverlay" hidden>

@@ -162,6 +162,26 @@ work (`cleaner.py` already sorts by `overall` descending).
 - "How to play" opens automatically the first time someone visits (tracked
   by `fw_seen_howto_v2` in `localStorage`).
 
+## Layout and UX notes
+
+- **One tile design at every size.** A guess is a card of rounded clue tiles:
+  a single row with column headers on laptops (860px+), wrapping to two rows
+  on phones and tablets, so no clue is ever off-screen. New guesses appear on
+  top, right under the search box, with a short tile-reveal animation
+  (disabled for people who prefer reduced motion).
+- **Phone-first details:** popups are bottom sheets, the on-screen keyboard
+  closes after each guess so the new clues are visible, touch targets are
+  44px+, the search box is 16px+ (stops iOS zooming on focus), and notches /
+  home indicators are respected (`viewport-fit=cover` + safe-area insets).
+- **Search:** ignores accents, ranks better-known players first, ignores
+  out-of-order responses, and is an accessible combobox (arrow keys, screen
+  reader announcements). Press `/` to jump to it on a keyboard.
+- **Accessibility:** every clue tile has a text description (tooltip and
+  screen-reader text), clue colours meet WCAG AA contrast, focus rings appear
+  for keyboard users only, and there's a skip link.
+- Only Oswald (wordmark and headlines) and Inter are loaded; the old
+  monospace face was dropped.
+
 ## Environment variables
 
 See `.env.example`. The only one you should always set explicitly in
