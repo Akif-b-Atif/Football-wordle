@@ -9,6 +9,9 @@
  *    the row-by-row comparison WITHOUT ever sending the hidden player's
  *    identity to the client until the game ends (win or out of guesses).
  *
+ * Data note: players.csv is the FIFA 22 database, so every club, rating, age
+ * and height is "as of 2022". The frontend shows a disclaimer saying so.
+ *
  * The "session" (which player is hidden, which guesses have been made)
  * is kept in a signed JWT handed back to the client on every request.
  * This means the server needs no database / sticky sessions, which is
@@ -50,11 +53,39 @@ const REQUIRED_FIELDS = [
   "player_positions",
   "overall",
   "age",
-  "dob",
+  "height_cm",
   "club_name",
   "league_name",
   "nationality_name",
 ];
+
+// "Mbappé" -> "mbappe", "N'Golo Kanté" -> "ngolo kante", "Ødegaard" -> "odegaard".
+// Lets people type names on a plain keyboard.
+function normalizeText(str) {
+  return String(str)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/ø/g, "o")
+    .replace(/æ/g, "ae")
+    .replace(/œ/g, "oe")
+    .replace(/ß/g, "ss")
+    .replace(/[đð]/g, "d")
+    .replace(/ł/g, "l")
+    .replace(/['’`]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+// Short league names shown under a club in the results table.
+const LEAGUE_LABEL = {
+  "English Premier League": "Premier League",
+  "Spain Primera Division": "La Liga",
+  "German 1. Bundesliga": "Bundesliga",
+  "Italian Serie A": "Serie A",
+  "French Ligue 1": "Ligue 1",
+};
+const leagueLabel = (name) => LEAGUE_LABEL[name] || name;
 
 function loadPool() {
   const raw = fs.readFileSync(DATA_FILE, "utf-8");
@@ -93,14 +124,17 @@ function loadPool() {
       all_positions: positions,
       overall: parseInt(row.overall, 10),
       age: parseInt(row.age, 10),
-      dob: row.dob,
+      height_cm: parseInt(row.height_cm, 10),
       club_name: row.club_name.trim(),
       league_name: row.league_name.trim(),
       nationality_name: row.nationality_name.trim(),
-      weak_foot: parseInt(row.weak_foot, 10) || null,
-      skill_moves: parseInt(row.skill_moves, 10) || null,
+      // Added by data/cleaner.py. Optional here: without it the nationality
+      // column just never goes yellow.
+      continent: (row.nationality_continent || "").trim() || null,
       traits,
       face_url: row.player_face_url || null,
+      // Accent-/punctuation-insensitive text used only by /api/search.
+      search_key: normalizeText(`${row.short_name} ${row.long_name || ""}`),
       // Position among valid rows in the CSV's own file order (already sorted
       // overall desc, then name by data/cleaner.py). Used to build the
       // answer-eligible pool below; unrelated to the id-sort applied after.
@@ -157,9 +191,19 @@ function positionFeedback(hiddenPos, guessPos) {
   return "gray";
 }
 
-function arrow(hiddenVal, guessVal) {
-  if (hiddenVal === guessVal) return "green";
-  return hiddenVal > guessVal ? "up" : "down";
+// Numeric clues: green = exact, yellow = within `closeBy`, gray = further away.
+// `arrow` always says which way the hidden player's value lies, so a yellow or
+// gray cell still tells you whether to go higher or lower.
+// Keep these thresholds in sync with "How to play" in public/index.html.
+const CLOSE_BY = { age: 2, overall: 2, height_cm: 3 };
+
+function numericFeedback(hiddenVal, guessVal, closeBy) {
+  if (hiddenVal === guessVal) return { value: guessVal, result: "green", arrow: null };
+  return {
+    value: guessVal,
+    result: Math.abs(hiddenVal - guessVal) <= closeBy ? "yellow" : "gray",
+    arrow: hiddenVal > guessVal ? "up" : "down",
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -196,38 +240,35 @@ function comparePlayers(hidden, guessed) {
       short_name: guessed.short_name,
       face_url: guessed.face_url,
     },
+    // green = same country; yellow = different country, same continent
     nationality: {
       value: guessed.nationality_name,
-      result: guessed.nationality_name === hidden.nationality_name ? "green" : "gray",
+      continent: guessed.continent,
+      result:
+        guessed.nationality_name === hidden.nationality_name
+          ? "green"
+          : guessed.continent && guessed.continent === hidden.continent
+          ? "yellow"
+          : "gray",
     },
-    league: {
-      value: guessed.league_name,
-      result: guessed.league_name === hidden.league_name ? "green" : "gray",
-    },
+    // green = same club; yellow = different club, same league
     club: {
       value: guessed.club_name,
-      result: guessed.club_name === hidden.club_name ? "green" : "gray",
+      league: leagueLabel(guessed.league_name),
+      result:
+        guessed.club_name === hidden.club_name
+          ? "green"
+          : guessed.league_name === hidden.league_name
+          ? "yellow"
+          : "gray",
     },
     position: {
       value: guessed.primary_position,
       result: positionFeedback(hidden.primary_position, guessed.primary_position),
     },
-    age: {
-      value: guessed.age,
-      result: arrow(hidden.age, guessed.age),
-    },
-    overall: {
-      value: guessed.overall,
-      result: arrow(hidden.overall, guessed.overall),
-    },
-    weak_foot: {
-      value: guessed.weak_foot,
-      result: guessed.weak_foot == null ? "gray" : arrow(hidden.weak_foot, guessed.weak_foot),
-    },
-    skill_moves: {
-      value: guessed.skill_moves,
-      result: guessed.skill_moves == null ? "gray" : arrow(hidden.skill_moves, guessed.skill_moves),
-    },
+    age: numericFeedback(hidden.age, guessed.age, CLOSE_BY.age),
+    overall: numericFeedback(hidden.overall, guessed.overall, CLOSE_BY.overall),
+    height: numericFeedback(hidden.height_cm, guessed.height_cm, CLOSE_BY.height_cm),
     traits: {
       shared: sharedTraits,
     },
@@ -287,22 +328,31 @@ app.get("/api/health", (req, res) => {
 });
 
 // Autocomplete search. Never reveals which player is hidden.
+// - accent-insensitive ("mbappe" finds Mbappé), every word you type must match
+// - best matches first: names where each typed word starts a name-word, then
+//   the rest; within each group, higher-rated (better-known) players first
 app.get("/api/search", (req, res) => {
-  const q = (req.query.q || "").toString().trim().toLowerCase();
+  const q = normalizeText((req.query.q || "").toString());
   if (q.length < 2) return res.json({ results: [] });
+  const tokens = q.split(" ");
 
-  const results = POOL.filter(
-    (p) => p.short_name.toLowerCase().includes(q) || p.long_name.toLowerCase().includes(q)
-  )
-    .slice(0, 8)
-    .map((p) => ({
-      id: p.id,
-      short_name: p.short_name,
-      long_name: p.long_name,
-      club_name: p.club_name,
-      nationality_name: p.nationality_name,
-      face_url: p.face_url,
-    }));
+  const matches = [];
+  for (const p of POOL) {
+    if (!tokens.every((t) => p.search_key.includes(t))) continue;
+    const words = p.search_key.split(" ");
+    const prefixMatch = tokens.every((t) => words.some((w) => w.startsWith(t)));
+    matches.push({ p, tier: prefixMatch ? 0 : 1 });
+  }
+  matches.sort((a, b) => a.tier - b.tier || a.p.rank - b.p.rank);
+
+  const results = matches.slice(0, 8).map(({ p }) => ({
+    id: p.id,
+    short_name: p.short_name,
+    long_name: p.long_name,
+    club_name: p.club_name,
+    nationality_name: p.nationality_name,
+    face_url: p.face_url,
+  }));
 
   res.json({ results });
 });

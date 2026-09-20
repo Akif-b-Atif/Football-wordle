@@ -3,8 +3,12 @@
 [deployment](https://footle-pi.vercel.app/)
 
 A daily footballer-guessing game, in the spirit of Wordle: guess the hidden
-player in 8 tries, using nationality, league, club, position, age, overall,
-weak foot, skill moves, and shared gameplay traits as clues.
+player in 8 tries, using nationality, club, position, age, overall, height,
+and shared gameplay traits as clues.
+
+> **Data disclaimer:** all player info (clubs, ages, ratings, heights) is as
+> of **2022** (FIFA 22 data) and may be out of date. The game says so in the
+> footer and in "How to play".
 
 ## How it's built
 
@@ -20,8 +24,9 @@ weak foot, skill moves, and shared gameplay traits as clues.
   leagues (Premier League, La Liga, Bundesliga, Serie A, Ligue 1), trimmed
   down from a full FIFA-style export (`data/players_raw.csv`, ~19,240
   players) by `data/cleaner.py`. The cleaner keeps only Big-5-league rows,
-  drops irrelevant columns, de-duplicates by `sofifa_id`, and sorts the
-  result by `overall` (descending) then `short_name`. Every player in this
+  drops irrelevant columns, de-duplicates by `sofifa_id`, drops incomplete
+  rows, adds a `nationality_continent` column (see "Continents" below), and
+  sorts the result by `overall` (descending) then `short_name`. Every player in this
   file is a valid **guess** — see "Answer pool" below for which of them can
   actually be the hidden player.
 
@@ -50,13 +55,14 @@ Then open http://localhost:3000
 
 ## Using your own player data
 
-`data/players.csv` already has the trimmed 14-column schema the app expects
+`data/players.csv` already has the trimmed 13-column schema the app expects
 (produced by `data/cleaner.py` from a full FIFA-style export). To swap in
 your own data, either:
 
 - point `data/cleaner.py`'s `INPUT_CSV` at your own full export and re-run
-  `python data/cleaner.py` from inside `data/` (edit `BIG_5_LEAGUES` first
-  if you want different leagues), or
+  `python data/cleaner.py` (edit `BIG_5_LEAGUES` first if you want different
+  leagues). The cleaner stops with a clear message if your data contains a
+  nationality it has no continent for — just add it to `CONTINENTS`, or
 - hand-build a CSV with the same columns below and set `DATA_FILE` to point
   at it.
 
@@ -69,19 +75,20 @@ leave populated or blank:
 | `short_name`, `long_name` | display name, search |
 | `player_positions` | primary position + position-group (yellow/green logic) |
 | `overall` | Overall Rating column |
-| `age`, `dob` | Age column |
+| `age` | Age column |
+| `height_cm` | Height column |
 | `club_name` | Club column |
-| `league_name` | League column |
+| `league_name` | Club column turns yellow when the league matches |
 | `nationality_name` | Nationality column |
-| `weak_foot` | Weak Foot column |
-| `skill_moves` | Skill Moves column |
+| `nationality_continent` | Nationality column turns yellow when the continent matches (optional — without it that clue is never yellow) |
 | `player_traits` | Shared Traits column |
 | `player_face_url` | player photo in search results / results table |
 
 **Data cleaning applied automatically at startup** (per the product spec),
 on top of what `cleaner.py` already did:
 - Duplicate `sofifa_id` rows are dropped (first occurrence wins).
-- Rows missing any required field above are excluded — from *both* being
+- Rows missing any required field above (all but `long_name`, `nationality_continent`,
+  `player_traits` and `player_face_url`) are excluded — from *both* being
   guessable and from being answer-eligible.
 - Rows whose `short_name` looks like a generic placeholder (e.g. `"Player 4"`)
   are excluded.
@@ -108,9 +115,25 @@ work (`cleaner.py` already sorts by `overall` descending).
 - Unlimited Mode: a fresh random hidden player every game, also drawn from
   the answer pool. In both modes you can still *guess* any of the ~2,976
   players in the full dataset.
-- Feedback columns: Nationality, League, Club, Position (green / yellow
-  same-group / gray), Age, Overall, Weak Foot, Skill Moves (green / ↑ / ↓),
-  and Shared Traits (only traits in common are revealed).
+- One rule for every clue: **green = exact, yellow = close, gray = not close.**
+  - **Nationality**: green = same country; yellow = different country, same
+    continent (Europe follows UEFA membership, so Turkey, Israel, Georgia etc.
+    count as Europe; England/Scotland/Wales/N. Ireland are separate countries
+    in Europe).
+  - **Club**: green = same club; yellow = different club, same league. League
+    is no longer a column of its own; the club cell shows its league in small
+    text so you can see why it's yellow.
+  - **Position**: green = same position; yellow = same group (attack / midfield
+    / defence); gray otherwise.
+  - **Age** (±2 years), **Overall** (±2), **Height** (±3 cm): green = exact,
+    yellow = within the band, gray = further. An arrow (▲/▼) always shows
+    whether the hidden player's value is higher or lower. The bands live in
+    `CLOSE_BY` in `server.js`; keep the "How to play" text in sync.
+  - **Shared Traits**: only traits in common are revealed.
+- Every result cell has a plain-English tooltip / screen-reader description, so
+  colour is never the only way to read a clue.
+- Search ignores accents and punctuation (`mbappe` finds Mbappé) and lists
+  better-known players first.
 - Each footballer can only be guessed once per game.
 - On loss, the hidden player's name, club, nationality, position, overall,
   and photo are revealed.

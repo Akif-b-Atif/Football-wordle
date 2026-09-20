@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Footle — Daily Football Guessing Game</title>
-<meta name="description" content="Guess the hidden footballer in 8 tries using nationality, league, club, position and more as clues. A new Footle every day." />
+<meta name="description" content="Guess the hidden footballer in 8 tries using nationality, club, position, age and more as clues. A new Footle every day." />
 <meta name="theme-color" content="#0b3d2e" />
 <meta property="og:title" content="Footle — Daily Football Guessing Game" />
 <meta property="og:description" content="Guess the hidden footballer in 8 tries. A new challenge every day." />
@@ -57,6 +57,12 @@
       <span id="guessCounter">0 / 8 guesses</span>
       <span id="statusMsg" class="status-msg" role="status" aria-live="polite"></span>
     </div>
+    <ul class="mini-legend" aria-label="Colour key">
+      <li><span class="swatch green"></span>Exact</li>
+      <li><span class="swatch yellow"></span>Close</li>
+      <li><span class="swatch gray"></span>No match</li>
+      <li><span class="swatch arrow">▲▼</span>Answer is higher / lower</li>
+    </ul>
   </section>
 
   <section class="board-scroll" aria-label="Guess results">
@@ -64,13 +70,11 @@
       <div class="results-head" id="resultsHead">
         <div class="cell head-cell player-col">Player</div>
         <div class="cell head-cell">Nation</div>
-        <div class="cell head-cell">League</div>
         <div class="cell head-cell">Club</div>
         <div class="cell head-cell">Pos</div>
         <div class="cell head-cell">Age</div>
         <div class="cell head-cell">OVR</div>
-        <div class="cell head-cell">Weak Ft</div>
-        <div class="cell head-cell">Skill</div>
+        <div class="cell head-cell">Height</div>
         <div class="cell head-cell traits-col">Shared Traits</div>
       </div>
       <div class="results-body" id="resultsBody"></div>
@@ -84,23 +88,69 @@
 </main>
 
 <footer class="pitch-footer">
-  <p>Guess the club, not the crest — every row is a clue. New Daily Challenge every day at 00:00 UTC.</p>
+  <p class="disclaimer">All player info (clubs, ages, ratings, heights) is as of 2022 and may be out of date.</p>
+  <p>New Daily Challenge every day at 00:00 UTC.</p>
 </footer>
 
 <!-- How to play modal -->
 <div class="modal-overlay" id="howToOverlay" hidden>
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="howToTitle">
-    <button class="modal-close" data-close-modal>&times;</button>
+  <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="howToTitle">
+    <button class="modal-close" data-close-modal aria-label="Close">&times;</button>
     <h2 id="howToTitle">How to play</h2>
-    <p>Guess the hidden footballer in 8 tries. After each guess, the row tells you how close you are.</p>
+    <p class="lead">Find the hidden footballer in <strong>8 guesses</strong>. Every guess shows a row of clues telling you how close you are.</p>
+
+    <h3>The colours</h3>
     <ul class="legend-list">
-      <li><span class="swatch green"></span> <strong>Green</strong> — exact match</li>
-      <li><span class="swatch yellow"></span> <strong>Yellow</strong> — position only: same positional group, not exact spot</li>
-      <li><span class="swatch gray"></span> <strong>Gray</strong> — no match</li>
-      <li><span class="swatch arrow">↑ / ↓</span> <strong>Arrows</strong> — for Age / Overall / Weak Foot / Skill Moves: the hidden player's value is higher or lower than your guess</li>
-      <li><span class="swatch traits">✓</span> <strong>Shared Traits</strong> — any gameplay traits your guess has in common with the hidden player</li>
+      <li><span class="swatch green"></span><span><strong>Green</strong> — exact match</span></li>
+      <li><span class="swatch yellow"></span><span><strong>Yellow</strong> — close, but not exact</span></li>
+      <li><span class="swatch gray"></span><span><strong>Gray</strong> — not close</span></li>
     </ul>
-    <p class="modal-note">Daily Challenge gives everyone the same footballer each day. Unlimited mode picks a fresh random player every game.</p>
+
+    <h3>What counts as “close”?</h3>
+    <table class="rules-table">
+      <thead>
+        <tr><th scope="col">Clue</th><th scope="col">Yellow when…</th></tr>
+      </thead>
+      <tbody>
+        <tr><th scope="row">Nation</th><td>Different country, <strong>same continent</strong><span class="eg">e.g. you guess Portugal, answer is England</span></td></tr>
+        <tr><th scope="row">Club</th><td>Different club, <strong>same league</strong><span class="eg">e.g. you guess Arsenal, answer is Chelsea</span></td></tr>
+        <tr><th scope="row">Pos</th><td>Different position, <strong>same group</strong> (attackers, midfielders or defenders)<span class="eg">e.g. LW and ST</span></td></tr>
+        <tr><th scope="row">Age</th><td>Within <strong>2 years</strong></td></tr>
+        <tr><th scope="row">OVR</th><td>Within <strong>2 rating points</strong></td></tr>
+        <tr><th scope="row">Height</th><td>Within <strong>3 cm</strong></td></tr>
+      </tbody>
+    </table>
+
+    <h3>Arrows</h3>
+    <p><span class="inline-arrow">▲</span> means the answer's number is <strong>higher</strong> than your guess; <span class="inline-arrow">▼</span> means <strong>lower</strong>. You'll see them on Age, OVR and Height, whatever the colour.</p>
+
+    <h3>Shared traits</h3>
+    <p>Playing-style traits (like <em>Flair</em> or <em>Power Header</em>) that your guess has in common with the answer. Only shared ones are shown.</p>
+
+    <h3>Example</h3>
+    <p class="example-caption">The answer is <strong>Harry Kane</strong> (England, Tottenham). You guess <strong>Raheem Sterling</strong>:</p>
+    <div class="example-grid" role="group" aria-label="Worked example">
+      <div><span class="example-label">Nation</span><span class="tile green">England</span></div>
+      <div><span class="example-label">Club</span><span class="tile yellow">Man City</span></div>
+      <div><span class="example-label">Pos</span><span class="tile yellow">LW</span></div>
+      <div><span class="example-label">Age</span><span class="tile yellow arrow-up">26</span></div>
+      <div><span class="example-label">OVR</span><span class="tile yellow arrow-up">88</span></div>
+      <div><span class="example-label">Height</span><span class="tile gray arrow-up">170</span></div>
+    </div>
+    <ul class="example-notes">
+      <li>Same country → <strong>green</strong>.</li>
+      <li>Different club, both in the Premier League → <strong>yellow</strong>. Both are attackers → <strong>yellow</strong>.</li>
+      <li>Age and OVR are within 2 of the answer, and ▲ says the answer is a bit higher → <strong>yellow</strong>.</li>
+      <li>170 cm is more than 3 cm off, so it's <strong>gray</strong>; ▲ says the answer is taller.</li>
+    </ul>
+
+    <h3>Good to know</h3>
+    <ul class="notes-list">
+      <li>The hidden player is always a well-known star (one of the ~180 highest-rated players), but you can guess anyone from the Big 5 leagues.</li>
+      <li>Daily Challenge gives everyone the same footballer each day. Unlimited mode picks a fresh random player every game.</li>
+    </ul>
+
+    <p class="disclaimer-box"><strong>Heads up:</strong> all player info (clubs, ages, ratings and heights) is as of 2022 (FIFA 22 data). Players may have since moved, retired or changed rating.</p>
   </div>
 </div>
 

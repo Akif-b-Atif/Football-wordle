@@ -37,7 +37,7 @@
   // -------------------------------------------------------------------
   const LS_TOKEN_PREFIX = "fw_token_"; // + mode (+ dateKey for daily)
   const LS_STATS = "fw_stats_v1";
-  const LS_SEEN_HOWTO = "fw_seen_howto";
+  const LS_SEEN_HOWTO = "fw_seen_howto_v2"; // bumped when the rules changed (yellow nation/club, new columns)
 
   function todayKeyLocalGuessFallback() {
     return new Date().toISOString().slice(0, 10);
@@ -196,14 +196,35 @@
   function resultClass(result) {
     if (result === "green") return "green";
     if (result === "yellow") return "yellow";
-    if (result === "gray") return "gray";
     return "gray";
   }
 
-  function arrowClass(result) {
-    if (result === "up") return "arrow-up";
-    if (result === "down") return "arrow-down";
-    return "";
+  // Plain-English meaning of each cell. Shown as a hover tooltip and read out
+  // by screen readers, so the colours are never the only way to get the clue.
+  // Keep the thresholds in sync with CLOSE_BY in server.js and "How to play".
+  const DESCRIBE = {
+    nationality: {
+      green: "same country",
+      yellow: "different country, same continent",
+      gray: "different continent",
+    },
+    club: {
+      green: "same club",
+      yellow: "different club, same league",
+      gray: "different league",
+    },
+    position: {
+      green: "same position",
+      yellow: "different position, same group",
+      gray: "different position group",
+    },
+  };
+  const CLOSE_TEXT = { age: "within 2 years", overall: "within 2 rating points", height: "within 3 cm" };
+
+  function describeNumeric(kind, fb) {
+    if (fb.result === "green") return "exact match";
+    const closeness = fb.result === "yellow" ? `close, ${CLOSE_TEXT[kind]}` : "not close";
+    return `${closeness}; the answer is ${fb.arrow === "up" ? "higher" : "lower"}`;
   }
 
   function renderHistory() {
@@ -223,30 +244,56 @@
     `;
     row.appendChild(playerCell);
 
-    row.appendChild(makeResultCell(fb.nationality.value, fb.nationality.result));
-    row.appendChild(makeResultCell(fb.league.value, fb.league.result));
-    row.appendChild(makeResultCell(fb.club.value, fb.club.result));
-    row.appendChild(makeResultCell(fb.position.value, fb.position.result));
-    row.appendChild(makeArrowCell(fb.age.value, fb.age.result));
-    row.appendChild(makeArrowCell(fb.overall.value, fb.overall.result));
-    row.appendChild(makeArrowCell(fb.weak_foot.value, fb.weak_foot.result));
-    row.appendChild(makeArrowCell(fb.skill_moves.value, fb.skill_moves.result));
+    row.appendChild(
+      makeResultCell(fb.nationality.value, fb.nationality.result, DESCRIBE.nationality[fb.nationality.result], fb.nationality.continent)
+    );
+    row.appendChild(makeResultCell(fb.club.value, fb.club.result, DESCRIBE.club[fb.club.result], fb.club.league));
+    row.appendChild(makeResultCell(fb.position.value, fb.position.result, DESCRIBE.position[fb.position.result]));
+    row.appendChild(makeArrowCell(fb.age, describeNumeric("age", fb.age)));
+    row.appendChild(makeArrowCell(fb.overall, describeNumeric("overall", fb.overall)));
+    row.appendChild(makeArrowCell(fb.height, describeNumeric("height", fb.height)));
     row.appendChild(makeTraitsCell(fb.traits.shared));
 
     els.resultsBody.prepend(row); // most recent guess on top
   }
 
-  function makeResultCell(value, result) {
+  // `sub` is a small context line under the value (continent under a nation,
+  // league under a club) so you can see *why* a cell is yellow.
+  function makeResultCell(value, result, description, sub) {
     const div = document.createElement("div");
-    div.className = `cell result-cell ${resultClass(result)}`;
-    div.textContent = value == null ? "—" : value;
+    div.className = `cell result-cell ${resultClass(result)}${sub ? " stacked" : ""}`;
+    div.title = description;
+
+    const main = document.createElement("span");
+    main.textContent = value == null ? "—" : value;
+    div.appendChild(main);
+
+    if (sub) {
+      const subEl = document.createElement("span");
+      subEl.className = "cell-sub";
+      subEl.textContent = sub;
+      div.appendChild(subEl);
+    }
+
+    const sr = document.createElement("span");
+    sr.className = "sr-only";
+    sr.textContent = `: ${description}`;
+    div.appendChild(sr);
     return div;
   }
 
-  function makeArrowCell(value, result) {
+  // fb = { value, result: green|yellow|gray, arrow: up|down|null }
+  function makeArrowCell(fb, description) {
     const div = document.createElement("div");
-    div.className = `cell result-cell ${resultClass(result)} ${arrowClass(result)}`;
-    div.textContent = value == null ? "—" : value;
+    const arrowCls = fb.arrow ? ` arrow-${fb.arrow}` : "";
+    div.className = `cell result-cell ${resultClass(fb.result)}${arrowCls}`;
+    div.title = description;
+    div.textContent = fb.value == null ? "—" : fb.value;
+
+    const sr = document.createElement("span");
+    sr.className = "sr-only";
+    sr.textContent = `: ${description}`;
+    div.appendChild(sr);
     return div;
   }
 
@@ -297,15 +344,16 @@
   }
 
   function shareResult(won, guessesUsed) {
+    const square = (r) => (r === "green" ? "🟩" : r === "yellow" ? "🟨" : "⬜");
+    // state.history is oldest-first, so the grid reads top to bottom in the
+    // order you guessed (like Wordle).
     const grid = state.history
-      .slice()
-      .reverse()
-      .map((fb) => {
-        const cells = [fb.nationality.result, fb.league.result, fb.club.result, fb.position.result];
-        return cells.map((r) => (r === "green" ? "🟩" : r === "yellow" ? "🟨" : "⬜")).join("");
-      })
+      .map((fb) =>
+        [fb.nationality, fb.club, fb.position, fb.age, fb.overall, fb.height].map((c) => square(c.result)).join("")
+      )
       .join("\n");
-    const text = `Footle ${state.dateKey} — ${won ? `${guessesUsed}/8` : "X/8"}\n${grid}`;
+    const link = /^https?:/.test(location.origin) ? `\n${location.origin}` : "";
+    const text = `Footle ${state.dateKey} — ${won ? `${guessesUsed}/8` : "X/8"}\n${grid}${link}`;
     if (navigator.share) {
       navigator.share({ text }).catch(() => {});
     } else if (navigator.clipboard) {
