@@ -9,8 +9,8 @@
  *    the row-by-row comparison WITHOUT ever sending the hidden player's
  *    identity to the client until the game ends (win or out of guesses).
  *
- * Data note: players.csv is the FIFA 22 database, so every club, rating, age
- * and height is "as of 2022". The frontend shows a disclaimer saying so.
+ * Data note: players.csv is the men's EA SPORTS FC 27 snapshot dated
+ * 2026-09-12. The frontend displays the dataset date.
  *
  * The "session" (which player is hidden, which guesses have been made)
  * is kept in a signed JWT handed back to the client on every request.
@@ -27,14 +27,15 @@ const { parse } = require("csv-parse/sync");
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, "data", "players.csv");
+const DATASET_VERSION = "fc27-2026-09-12-clues-v2";
 const MAX_GUESSES = 8;
 
 // Every player in the CSV is a valid *guess* (autocomplete/search), but only
 // the top N players — by the CSV's own sort order (overall desc, then name)
 // — are eligible to be picked as the *hidden* player for Daily or Unlimited
 // mode. This keeps the answer pool to well-known, high-rated players while
-// still letting people guess anyone in the Big 5 leagues dataset.
-const ANSWER_POOL_SIZE = parseInt(process.env.ANSWER_POOL_SIZE, 10) || 182;
+// still letting people guess anyone in the global men's dataset.
+const ANSWER_POOL_SIZE = parseInt(process.env.ANSWER_POOL_SIZE, 10) || 200;
 
 if (JWT_SECRET === "dev-secret-change-me") {
   console.warn(
@@ -48,16 +49,24 @@ if (JWT_SECRET === "dev-secret-change-me") {
 // ---------------------------------------------------------------------------
 
 const REQUIRED_FIELDS = [
-  "sofifa_id",
+  "player_id",
   "short_name",
   "primary_position",
   "overall",
   "age",
-  "height_cm",
   "club_name",
   "league_name",
   "nationality_name",
+  "skill_moves",
+  "weak_foot",
+  "pace",
+  "shooting",
+  "passing",
+  "dribbling",
+  "defending",
+  "physicality",
 ];
+const ATTRIBUTE_FIELDS = ["pace", "shooting", "passing", "dribbling", "defending", "physicality"];
 
 // "Mbappé" -> "mbappe", "N'Golo Kanté" -> "ngolo kante", "Ødegaard" -> "odegaard".
 // Lets people type names on a plain keyboard.
@@ -80,11 +89,9 @@ function normalizeText(str) {
 
 // Short league names shown under a club in the results table.
 const LEAGUE_LABEL = {
-  "English Premier League": "Premier League",
-  "Spain Primera Division": "La Liga",
-  "German 1. Bundesliga": "Bundesliga",
-  "Italian Serie A": "Serie A",
-  "French Ligue 1": "Ligue 1",
+  "LALIGA EA SPORTS": "LaLiga",
+  "Serie A Enilive": "Serie A",
+  "Ligue 1 McDonald's": "Ligue 1",
 };
 const leagueLabel = (name) => LEAGUE_LABEL[name] || name;
 
@@ -100,7 +107,7 @@ function loadPool() {
   const pool = [];
 
   for (const row of records) {
-    const id = (row.sofifa_id || "").toString().trim();
+    const id = (row.player_id || "").toString().trim();
     if (!id || seenIds.has(id)) continue;
 
     const missingRequired = REQUIRED_FIELDS.some((f) => !row[f] || !row[f].toString().trim());
@@ -109,8 +116,7 @@ function loadPool() {
     // filter out obvious placeholder / generic records
     if (/^player\s*\d*$/i.test(row.short_name.trim())) continue;
 
-    // data/cleaner.py already stripped "(AI)" variants and de-duplicated traits
-    const traits = (row.player_traits || "")
+    const playstyles = (row.playstyles || "")
       .split(",")
       .map((t) => t.trim())
       .filter(Boolean);
@@ -123,15 +129,16 @@ function loadPool() {
       primary_position: row.primary_position.trim().toUpperCase(),
       overall: parseInt(row.overall, 10),
       age: parseInt(row.age, 10),
-      height_cm: parseInt(row.height_cm, 10),
       club_name: row.club_name.trim(),
       league_name: row.league_name.trim(),
       nationality_name: row.nationality_name.trim(),
-      // Added by data/cleaner.py. Optional here: without it the nationality
-      // column just never goes yellow.
       continent: (row.nationality_continent || "").trim() || null,
-      traits,
-      face_url: row.player_face_url || null,
+      skill_moves: parseInt(row.skill_moves, 10),
+      weak_foot: parseInt(row.weak_foot, 10),
+      playstyles,
+      attributes: Object.fromEntries(
+        ATTRIBUTE_FIELDS.map((field) => [field, parseInt(row[field], 10)])
+      ),
       // Accent-/punctuation-insensitive text used only by /api/search.
       search_key: normalizeText(`${row.short_name} ${row.long_name || ""}`),
       // Position among valid rows in the CSV's own file order (already sorted
@@ -194,7 +201,18 @@ function positionFeedback(hiddenPos, guessPos) {
 // `arrow` always says which way the hidden player's value lies, so a yellow or
 // gray cell still tells you whether to go higher or lower.
 // Keep these thresholds in sync with "How to play" in public/index.html.
-const CLOSE_BY = { age: 2, overall: 2, height_cm: 3 };
+const CLOSE_BY = {
+  age: 2,
+  overall: 2,
+  skill_moves: 1,
+  weak_foot: 1,
+  pace: 3,
+  shooting: 3,
+  passing: 3,
+  dribbling: 3,
+  defending: 3,
+  physicality: 3,
+};
 
 function numericFeedback(hiddenVal, guessVal, closeBy) {
   if (hiddenVal === guessVal) return { value: guessVal, result: "green", arrow: null };
@@ -231,13 +249,12 @@ function dailyPlayerFor(dateKey) {
 // ---------------------------------------------------------------------------
 
 function comparePlayers(hidden, guessed) {
-  const sharedTraits = guessed.traits.filter((t) => hidden.traits.includes(t));
+  const sharedPlaystyles = guessed.playstyles.filter((style) => hidden.playstyles.includes(style));
 
   return {
     guessedPlayer: {
       id: guessed.id,
       short_name: guessed.short_name,
-      face_url: guessed.face_url,
     },
     // green = same country; yellow = different country, same continent
     nationality: {
@@ -267,9 +284,16 @@ function comparePlayers(hidden, guessed) {
     },
     age: numericFeedback(hidden.age, guessed.age, CLOSE_BY.age),
     overall: numericFeedback(hidden.overall, guessed.overall, CLOSE_BY.overall),
-    height: numericFeedback(hidden.height_cm, guessed.height_cm, CLOSE_BY.height_cm),
-    traits: {
-      shared: sharedTraits,
+    skillMoves: numericFeedback(hidden.skill_moves, guessed.skill_moves, CLOSE_BY.skill_moves),
+    weakFoot: numericFeedback(hidden.weak_foot, guessed.weak_foot, CLOSE_BY.weak_foot),
+    attributes: Object.fromEntries(
+      ATTRIBUTE_FIELDS.map((field) => [
+        field,
+        numericFeedback(hidden.attributes[field], guessed.attributes[field], CLOSE_BY[field]),
+      ])
+    ),
+    playstyles: {
+      shared: sharedPlaystyles,
     },
     correct: guessed.id === hidden.id,
   };
@@ -284,7 +308,6 @@ function revealOf(player) {
     nationality_name: player.nationality_name,
     primary_position: player.primary_position,
     overall: player.overall,
-    face_url: player.face_url,
   };
 }
 
@@ -293,12 +316,13 @@ function revealOf(player) {
 // ---------------------------------------------------------------------------
 
 function signSession(session) {
-  return jwt.sign(session, JWT_SECRET, { expiresIn: "24h" });
+  return jwt.sign({ ...session, datasetVersion: DATASET_VERSION }, JWT_SECRET, { expiresIn: "24h" });
 }
 
 function readSession(token) {
   try {
-    const { iat, exp, ...session } = jwt.verify(token, JWT_SECRET);
+    const { iat, exp, datasetVersion, ...session } = jwt.verify(token, JWT_SECRET);
+    if (datasetVersion !== DATASET_VERSION) return null;
     return session;
   } catch (e) {
     return null;
@@ -350,7 +374,13 @@ app.get("/api/search", (req, res) => {
     long_name: p.long_name,
     club_name: p.club_name,
     nationality_name: p.nationality_name,
-    face_url: p.face_url,
+    position: p.primary_position,
+    age: p.age,
+    overall: p.overall,
+    skill_moves: p.skill_moves,
+    weak_foot: p.weak_foot,
+    attributes: p.attributes,
+    playstyles: p.playstyles,
   }));
 
   res.json({ results });
@@ -450,46 +480,6 @@ app.post("/api/game/state", (req, res) => {
     history,
     reveal: gameOver ? revealOf(hidden) : undefined,
   });
-});
-
-// Player photo fallback. The browser first tries the sofifa CDN directly; if
-// that fails (hotlink protection, blocked host, ...) the frontend asks here
-// instead, and we fetch the image server-side and serve it from our own
-// origin. Only URLs on the CDN host taken from our own data are ever fetched
-// (never anything the client supplies), and results are cached.
-const FACE_HOST = /^https:\/\/cdn\.sofifa\.net\//;
-const FACE_CACHE_MAX = 500;
-const faceCache = new Map(); // id -> { type, body }
-
-app.get("/api/face/:id", async (req, res) => {
-  const player = BY_ID.get(req.params.id);
-  if (!player || !player.face_url || !FACE_HOST.test(player.face_url)) {
-    return res.status(404).end();
-  }
-
-  try {
-    let entry = faceCache.get(player.id);
-    if (!entry) {
-      const upstream = await fetch(player.face_url, {
-        headers: { "User-Agent": "Mozilla/5.0 (compatible; Footle/1.0)", Accept: "image/*" },
-        signal: AbortSignal.timeout(6000),
-      });
-      const type = upstream.headers.get("content-type") || "";
-      if (!upstream.ok || !type.startsWith("image/")) return res.status(404).end();
-
-      const body = Buffer.from(await upstream.arrayBuffer());
-      if (body.length === 0 || body.length > 500_000) return res.status(404).end();
-
-      entry = { type, body };
-      if (faceCache.size >= FACE_CACHE_MAX) faceCache.delete(faceCache.keys().next().value);
-      faceCache.set(player.id, entry);
-    }
-    res.set("Content-Type", entry.type);
-    res.set("Cache-Control", "public, max-age=604800, s-maxage=604800");
-    res.send(entry.body);
-  } catch {
-    res.status(404).end();
-  }
 });
 
 app.use(express.static(path.join(__dirname, "public")));

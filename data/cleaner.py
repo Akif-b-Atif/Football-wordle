@@ -1,15 +1,7 @@
-"""
-Cleans the full FIFA-style export (players_raw.csv) down to the players.csv
-that the game actually loads.
+"""Prepare the EA FC 27 player snapshot for Footle.
 
-This script is the ONE place data gets prepared: server.js reads players.csv
-as-is. players.csv contains exactly the columns listed in OUTPUT_COLUMNS
-below, every one of which the game uses, and nothing else.
-
-Run from anywhere:   python data/cleaner.py
-
-Data note: the export is the FIFA 22 database, so every club, rating, age and
-height in it is "as of 2022". The game shows a disclaimer saying so.
+Run from anywhere: python data/cleaner.py
+The source snapshot is dated 2026-09-12. Ages are calculated on that date.
 """
 import re
 from pathlib import Path
@@ -23,73 +15,59 @@ HERE = Path(__file__).resolve().parent
 INPUT_CSV = HERE / "players_raw.csv"
 OUTPUT_CSV = HERE / "players.csv"
 
-BIG_5_LEAGUES = [
-    "French Ligue 1",
-    "German 1. Bundesliga",
-    "English Premier League",
-    "Spain Primera Division",
-    "Italian Serie A",
-]
-
-# Raw columns we read from the export. (weak_foot, skill_moves and dob were
-# dropped: weak foot / skill moves are FIFA-game ratings most fans can't reason
-# about, and dob is redundant with `age`.)
+# Source columns used to build the game data.
 RAW_COLUMNS = [
-    "sofifa_id",
-    "short_name",
-    "long_name",
-    "player_positions",   # only the first (primary) position is used, see below
-    "overall",
-    "age",
-    "height_cm",
-    "club_name",
-    "league_name",
-    "nationality_name",
-    "player_traits",
-    "player_face_url",
+    "player_id",
+    "common_name",
+    "first_name",
+    "last_name",
+    "overall_rating",
+    "position",
+    "club",
+    "league",
+    "nationality",
+    "gender",
+    "skill_moves",
+    "weak_foot",
+    "birthdate",
+    "playstyles",
+    "pace",
+    "shooting",
+    "passing",
+    "dribbling",
+    "defending",
+    "physicality",
+    "snapshot_date",
 ]
 
-# The exact schema of players.csv, in order. Each column is read by server.js:
-#   sofifa_id             unique id
-#   short_name, long_name display + search
-#   primary_position      Pos clue
-#   overall, age          OVR / Age clues
-#   height_cm             Height clue
-#   club_name             Club clue
-#   league_name           Club clue turns yellow on a matching league
-#   nationality_name      Nation clue
-#   nationality_continent Nation clue turns yellow on a matching continent
-#   player_traits         Shared Traits clue
-#   player_face_url       player photo
+# Exact runtime schema. Every field is used by server.js.
 OUTPUT_COLUMNS = [
-    "sofifa_id",
+    "player_id",
     "short_name",
     "long_name",
     "primary_position",
     "overall",
     "age",
-    "height_cm",
     "club_name",
     "league_name",
     "nationality_name",
     "nationality_continent",
-    "player_traits",
-    "player_face_url",
+    "skill_moves",
+    "weak_foot",
+    "playstyles",
+    "pace",
+    "shooting",
+    "passing",
+    "dribbling",
+    "defending",
+    "physicality",
 ]
 
-# Columns a row must have to be playable at all (traits may legitimately be empty).
+# Optional data (common names and PlayStyles) may be blank in the source.
 REQUIRED_COLUMNS = [
-    "sofifa_id",
-    "short_name",
-    "long_name",
-    "primary_position",
-    "overall",
-    "age",
-    "height_cm",
-    "club_name",
-    "league_name",
-    "nationality_name",
-    "player_face_url",
+    "player_id", "first_name", "last_name", "overall_rating", "position",
+    "club", "league", "nationality", "skill_moves", "weak_foot", "birthdate",
+    "pace", "shooting", "passing", "dribbling", "defending", "physicality",
 ]
 
 # -----------------------------
@@ -108,8 +86,8 @@ CONTINENTS = {
         "Czech Republic", "Denmark", "England", "Estonia", "Faroe Islands",
         "Finland", "France", "Georgia", "Germany", "Gibraltar", "Greece",
         "Hungary", "Iceland", "Israel", "Italy", "Kazakhstan", "Kosovo",
-        "Latvia", "Lithuania", "Luxembourg", "Malta", "Moldova", "Montenegro",
-        "Netherlands", "North Macedonia", "Northern Ireland", "Norway",
+        "Latvia", "Liechtenstein", "Lithuania", "Luxembourg", "Malta", "Moldova", "Montenegro",
+        "Netherlands", "Holland", "North Macedonia", "Northern Ireland", "Norway",
         "Poland", "Portugal", "Republic of Ireland", "Romania", "Russia",
         "Scotland", "Serbia", "Slovakia", "Slovenia", "Spain", "Sweden",
         "Switzerland", "Turkey", "Ukraine", "Wales",
@@ -119,32 +97,33 @@ CONTINENTS = {
         "Cape Verde Islands", "Central African Republic", "Chad", "Comoros",
         "Congo", "Congo DR", "Côte d'Ivoire", "Egypt", "Equatorial Guinea",
         "Eritrea", "Ethiopia", "Gabon", "Gambia", "Ghana", "Guinea",
-        "Guinea Bissau", "Kenya", "Liberia", "Libya", "Madagascar", "Malawi",
+        "Guinea Bissau", "Guinea-Bissau", "Kenya", "Liberia", "Libya", "Madagascar", "Malawi",
         "Mali", "Mauritania", "Mauritius", "Morocco", "Mozambique", "Namibia",
         "Niger", "Nigeria", "Senegal", "Sierra Leone", "South Africa",
         "South Sudan", "Sudan", "Tanzania", "Togo", "Tunisia", "Uganda",
-        "Zambia", "Zimbabwe",
+        "Zambia", "Zimbabwe", "Rwanda", "Somalia", "São Tomé e Príncipe",
     ],
     "Asia": [
-        "Afghanistan", "Bhutan", "China PR", "Chinese Taipei", "Hong Kong",
+        "Afghanistan", "Bangladesh", "Bhutan", "China PR", "Chinese Taipei", "Hong Kong",
         "India", "Indonesia", "Iran", "Iraq", "Japan", "Jordan", "Korea DPR",
         "Korea Republic", "Kyrgyzstan", "Lebanon", "Malaysia", "Palestine",
-        "Philippines", "Saudi Arabia", "Syria", "Thailand",
-        "United Arab Emirates", "Uzbekistan", "Vietnam",
+        "Oman", "Pakistan", "Philippines", "Qatar", "Saudi Arabia", "Syria",
+        "Sri Lanka", "Thailand", "United Arab Emirates", "Uzbekistan", "Vietnam", "Yemen",
     ],
     "North America": [
         "Antigua and Barbuda", "Barbados", "Belize", "Bermuda", "Canada",
-        "Costa Rica", "Cuba", "Curacao", "Dominican Republic", "El Salvador",
+        "Costa Rica", "Cuba", "Curacao", "Curaçao", "Dominican Republic", "El Salvador",
         "Grenada", "Guatemala", "Haiti", "Honduras", "Jamaica", "Mexico",
         "Montserrat", "Panama", "Puerto Rico", "Saint Kitts and Nevis",
-        "Saint Lucia", "Trinidad and Tobago", "United States",
+        "St. Kitts and Nevis", "Saint Lucia", "St. Lucia", "Trinidad and Tobago", "United States",
     ],
     "South America": [
         "Argentina", "Bolivia", "Brazil", "Chile", "Colombia", "Ecuador",
         "Guyana", "Paraguay", "Peru", "Suriname", "Uruguay", "Venezuela",
     ],
     "Oceania": [
-        "Australia", "Fiji", "Guam", "New Zealand", "Papua New Guinea",
+        "Australia", "Fiji", "Guam", "New Caledonia", "New Zealand",
+        "Papua New Guinea", "Vanuatu",
     ],
 }
 
@@ -154,113 +133,123 @@ NATION_TO_CONTINENT = {
     for nation in nations
 }
 
-# -----------------------------
-# Load dataset
-# -----------------------------
-df = pd.read_csv(INPUT_CSV, low_memory=False)
+def restore_invalid_bytes(value):
+    """Recover occasional CP1252 bytes embedded in an otherwise UTF-8 CSV."""
+    if not isinstance(value, str):
+        return value
+    return re.sub(
+        r"[\udc80-\udcff]",
+        lambda match: bytes([ord(match.group()) - 0xDC00]).decode("cp1252", errors="replace"),
+        value,
+    )
+
+
+def format_long_name(row):
+    first = row["first_name"].strip()
+    last = row["last_name"].strip()
+    common = row["common_name"].strip()
+    if common:
+        return f'{first} "{common}" {last}'.strip()
+    return f"{first} {last}".strip()
+
+
+def age_on_snapshot(birthdate, snapshot_date):
+    return snapshot_date.year - birthdate.year - (
+        (snapshot_date.month, snapshot_date.day) < (birthdate.month, birthdate.day)
+    )
+
+
+df = pd.read_csv(
+    INPUT_CSV,
+    low_memory=False,
+    encoding="utf-8-sig",
+    encoding_errors="surrogateescape",
+)
+missing_source_columns = sorted(set(RAW_COLUMNS) - set(df.columns))
+if missing_source_columns:
+    raise SystemExit(f"Source CSV is missing required columns: {missing_source_columns}")
+
+for column in df.select_dtypes(include=["object", "string"]).columns:
+    df[column] = df[column].map(restore_invalid_bytes)
 
 print(f"Original rows: {len(df):,}")
 
-# -----------------------------
-# Keep only Big 5 leagues
-# -----------------------------
-df = df[df["league_name"].isin(BIG_5_LEAGUES)]
+# Footle currently uses the men's player pool only; keep every men's league.
+df = df[df["gender"] == "Men's Football"].copy()
+df = df[RAW_COLUMNS].drop_duplicates(subset="player_id").copy()
+print(f"Men's players after de-duplication: {len(df):,}")
 
-print(f"After league filter: {len(df):,}")
+for column in ["common_name", "first_name", "last_name", "club", "league", "nationality", "position"]:
+    df[column] = df[column].fillna("").astype("string").str.strip()
 
-# -----------------------------
-# Keep only required columns
-# -----------------------------
-df = df[RAW_COLUMNS].copy()
-
-# -----------------------------
-# Remove duplicate players
-# (keeps first occurrence)
-# -----------------------------
-df = df.drop_duplicates(subset="sofifa_id")
-
-print(f"After removing duplicates: {len(df):,}")
-
-# -----------------------------
-# Primary position
-# player_positions is a list ("LW, RW, ST"); the game only ever uses the first
-# one, so keep just that.
-# -----------------------------
-df["primary_position"] = (
-    df["player_positions"].astype("string").str.split(",").str[0].str.strip().str.upper()
+df["short_name"] = df["common_name"].where(
+    df["common_name"].ne(""), df["last_name"]
 )
+df["long_name"] = df.apply(format_long_name, axis=1)
+df["primary_position"] = df["position"].str.upper()
+df["overall"] = pd.to_numeric(df["overall_rating"], errors="coerce")
+df["skill_moves"] = pd.to_numeric(df["skill_moves"], errors="coerce")
+df["weak_foot"] = pd.to_numeric(df["weak_foot"], errors="coerce")
+for stat in ["pace", "shooting", "passing", "dribbling", "defending", "physicality"]:
+    df[stat] = pd.to_numeric(df[stat], errors="coerce")
+df["birthdate"] = pd.to_datetime(df["birthdate"], errors="coerce")
+snapshot_dates = pd.to_datetime(df["snapshot_date"], errors="coerce").dropna().unique()
+if len(snapshot_dates) != 1:
+    raise SystemExit(
+        f"Expected one snapshot date in the source CSV; found {len(snapshot_dates)}."
+    )
+snapshot_date = pd.Timestamp(snapshot_dates[0]).date()
+df["age"] = df["birthdate"].map(
+    lambda birthdate: age_on_snapshot(birthdate.date(), snapshot_date)
+    if pd.notna(birthdate)
+    else pd.NA
+)
+df["nationality_continent"] = df["nationality"].map(NATION_TO_CONTINENT)
+df["playstyles"] = df["playstyles"].fillna("").astype("string").str.strip()
 
-
-# -----------------------------
-# Traits
-# Raw data has "(AI)" variants of traits (e.g. "Flair (AI)") and sometimes both
-# the plain and "(AI)" version of the same trait. Strip the suffix and
-# de-duplicate, keeping order.
-# -----------------------------
-def clean_traits(value):
-    if pd.isna(value):
-        return ""
-    seen, out = set(), []
-    for trait in re.sub(r"\(ai\)", "", str(value), flags=re.IGNORECASE).split(","):
-        trait = trait.strip()
-        if trait and trait not in seen:
-            seen.add(trait)
-            out.append(trait)
-    return ", ".join(out)
-
-
-df["player_traits"] = df["player_traits"].map(clean_traits)
-
-# -----------------------------
-# Clean text columns: drop invisible characters (e.g. the soft hyphen hiding
-# inside "Guðmunds\u00adson", which splits the word for search) and trim whitespace
-# -----------------------------
-INVISIBLE_CHARS = "[\u00ad\u200b-\u200d\u2060\ufeff]"
-for col in ["short_name", "long_name", "club_name", "league_name", "nationality_name"]:
-    df[col] = df[col].astype("string").str.replace(INVISIBLE_CHARS, "", regex=True).str.strip()
-
-# -----------------------------
-# Drop rows the game can't use
-# -----------------------------
-df = df.dropna(subset=REQUIRED_COLUMNS)
-
-print(f"After dropping incomplete rows: {len(df):,}")
-
-# -----------------------------
-# Add continent (fail loudly if a nationality isn't mapped, so a swapped-in
-# dataset can never silently break the yellow nationality clue)
-# -----------------------------
-df["nationality_continent"] = df["nationality_name"].map(NATION_TO_CONTINENT)
-
-unmapped = sorted(df.loc[df["nationality_continent"].isna(), "nationality_name"].unique())
+unmapped = sorted(df.loc[df["nationality_continent"].isna(), "nationality"].unique())
 if unmapped:
     raise SystemExit(
         f"No continent mapped for: {unmapped}\n"
         "Add them to CONTINENTS in cleaner.py and re-run."
     )
 
-df["height_cm"] = df["height_cm"].astype(int)
+text_columns = [
+    "player_id", "short_name", "long_name", "primary_position", "club",
+    "league", "nationality", "nationality_continent", "playstyles",
+]
+invisible_chars = "[\u00ad\u200b-\u200d\u2060\ufeff]"
+for column in text_columns:
+    df[column] = df[column].astype("string").str.replace(invisible_chars, "", regex=True).str.strip()
 
-# -----------------------------
-# Final schema: exactly the columns the game uses, no more, no less
-# -----------------------------
+df["playstyles"] = df["playstyles"].map(
+    lambda value: ", ".join(dict.fromkeys(
+        item.strip() for item in value.split(",") if item.strip()
+    ))
+)
+df = df.dropna(subset=REQUIRED_COLUMNS + ["overall", "age"])
+df = df[df["short_name"].ne("") & df["long_name"].ne("")]
+df = df.rename(
+    columns={
+        "club": "club_name",
+        "league": "league_name",
+        "nationality": "nationality_name",
+    }
+)
+
+numeric_columns = [
+    "overall", "age", "skill_moves", "weak_foot", "pace", "shooting",
+    "passing", "dribbling", "defending", "physicality",
+]
+df[numeric_columns] = df[numeric_columns].astype(int)
 df = df[OUTPUT_COLUMNS]
 assert list(df.columns) == OUTPUT_COLUMNS
 
-# -----------------------------
-# Sort
-# (the game treats file order as "how famous": the top ANSWER_POOL_SIZE rows
-#  can be the hidden player)
-# -----------------------------
-df = df.sort_values(
-    by=["overall", "short_name"],
-    ascending=[False, True]
-)
+# High-rated players make a recognizable answer pool; every men's player is
+# still available as a guess.
+df = df.sort_values(by=["overall", "short_name", "player_id"], ascending=[False, True, True])
+df.to_csv(OUTPUT_CSV, index=False, encoding="utf-8")
 
-# -----------------------------
-# Save cleaned dataset
-# -----------------------------
-df.to_csv(OUTPUT_CSV, index=False)
-
+print(f"Snapshot date: {snapshot_date.isoformat()}")
 print(f"Saved cleaned dataset to '{OUTPUT_CSV.name}'")
-print(f"Final rows: {len(df):,}")
+print(f"Final men's players: {len(df):,}")

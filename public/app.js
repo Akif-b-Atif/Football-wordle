@@ -59,7 +59,7 @@
   // -------------------------------------------------------------------
   const LS_TOKEN_PREFIX = "fw_token_"; // + mode (+ dateKey for daily)
   const LS_STATS = { daily: "fw_stats_v1", unlimited: "fw_stats_unlimited_v1" };
-  const LS_SEEN_HOWTO = "fw_seen_howto_v2"; // bumped when the rules changed (yellow nation/club, new columns)
+  const LS_SEEN_HOWTO = "fw_seen_howto_v3";
 
   function todayKeyLocalGuessFallback() {
     return new Date().toISOString().slice(0, 10);
@@ -254,7 +254,18 @@
       gray: "different position group",
     },
   };
-  const CLOSE_TEXT = { age: "within 2 years", overall: "within 2 rating points", height: "within 3 cm" };
+  const CLOSE_TEXT = {
+    age: "within 2 years",
+    overall: "within 2 rating points",
+    skillMoves: "within 1 star",
+    weakFoot: "within 1 star",
+    pace: "within 3 rating points",
+    shooting: "within 3 rating points",
+    passing: "within 3 rating points",
+    dribbling: "within 3 rating points",
+    defending: "within 3 rating points",
+    physicality: "within 3 rating points",
+  };
 
   function describeNumeric(kind, fb) {
     if (fb.result === "green") return "exact match";
@@ -279,7 +290,7 @@
     const playerCell = document.createElement("div");
     playerCell.className = "player-col";
     playerCell.innerHTML = `
-      ${faceImg(fb.guessedPlayer.face_url, fb.guessedPlayer.id, fb.guessedPlayer.short_name)}
+      ${initialsBadge(fb.guessedPlayer.short_name)}
       <span class="player-name">${escapeHtml(fb.guessedPlayer.short_name)}</span>
       <span class="guess-no">Guess ${index}</span>
     `;
@@ -290,9 +301,12 @@
     row.appendChild(makeResultCell("club", "Club", c.value, c.result, DESCRIBE.club[c.result], c.league));
     row.appendChild(makeResultCell("pos", "Pos", pos.value, pos.result, DESCRIBE.position[pos.result]));
     row.appendChild(makeArrowCell("age", "Age", fb.age, describeNumeric("age", fb.age)));
-    row.appendChild(makeArrowCell("overall", "OVR", fb.overall, describeNumeric("overall", fb.overall)));
-    row.appendChild(makeArrowCell("height", "Height", fb.height, describeNumeric("height", fb.height)));
-    row.appendChild(makeTraitsCell(fb.traits.shared));
+    const { cell: overallCell, panel: attributePanel } = makeOverallCell(fb.overall, fb.attributes, index);
+    row.appendChild(overallCell);
+    row.appendChild(makeArrowCell("skill-moves", "Skills", fb.skillMoves, describeNumeric("skillMoves", fb.skillMoves)));
+    row.appendChild(makeArrowCell("weak-foot", "Weak Foot", fb.weakFoot, describeNumeric("weakFoot", fb.weakFoot)));
+    row.appendChild(makePlaystylesCell(fb.playstyles));
+    row.appendChild(attributePanel);
 
     els.resultsBody.prepend(row); // most recent guess on top
   }
@@ -344,14 +358,59 @@
     return div;
   }
 
-  function makeTraitsCell(shared) {
+  function makeOverallCell(fb, attributes, index) {
+    const cell = makeArrowCell("overall", "OVR", fb, describeNumeric("overall", fb));
+    const panelId = `attributes-${index}`;
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "stats-toggle";
+    toggle.textContent = "Stats +";
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.setAttribute("aria-controls", panelId);
+    toggle.setAttribute("aria-label", "Expand player attribute clues");
+    cell.appendChild(toggle);
+
+    const panel = document.createElement("div");
+    panel.className = "attribute-panel";
+    panel.id = panelId;
+    panel.hidden = true;
+    panel.setAttribute("role", "group");
+    panel.setAttribute("aria-label", "Player attribute clues");
+    const labels = {
+      pace: "PAC",
+      shooting: "SHO",
+      passing: "PAS",
+      dribbling: "DRI",
+      defending: "DEF",
+      physicality: "PHY",
+    };
+    for (const [field, label] of Object.entries(labels)) {
+      panel.appendChild(makeArrowCell("attribute", label, attributes[field], describeNumeric(field, attributes[field])));
+    }
+    toggle.addEventListener("click", () => {
+      const expanded = toggle.getAttribute("aria-expanded") === "true";
+      toggle.setAttribute("aria-expanded", String(!expanded));
+      toggle.setAttribute("aria-label", `${expanded ? "Expand" : "Collapse"} player attribute clues`);
+      toggle.textContent = expanded ? "Stats +" : "Stats −";
+      panel.hidden = expanded;
+    });
+    return { cell, panel };
+  }
+
+  function makePlaystylesCell(playstyles) {
     const div = document.createElement("div");
     div.className = "traits-col";
-    if (!shared || shared.length === 0) {
+    const shared = playstyles && Array.isArray(playstyles.shared) ? playstyles.shared : [];
+    if (shared.length === 0) {
       div.classList.add("is-empty");
-      div.innerHTML = `<span class="trait-none">No shared traits</span>`;
+      div.innerHTML = `<span class="trait-none">No shared PlayStyles</span>`;
     } else {
-      div.innerHTML = shared.map((t) => `<span class="trait-chip">${escapeHtml(t)}</span>`).join("");
+      for (const style of shared) {
+        const chip = document.createElement("span");
+        chip.className = "trait-chip";
+        chip.textContent = style;
+        div.appendChild(chip);
+      }
     }
     return div;
   }
@@ -398,7 +457,7 @@
 
   function revealHtml(reveal) {
     return `
-        ${faceImg(reveal.face_url, reveal.id, reveal.short_name)}
+        ${initialsBadge(reveal.short_name)}
         <div>
           <div class="reveal-name">${escapeHtml(reveal.long_name || reveal.short_name)}</div>
           <div class="reveal-sub">${escapeHtml(reveal.club_name)} · ${escapeHtml(reveal.nationality_name)} · ${escapeHtml(reveal.primary_position)} · OVR ${reveal.overall}</div>
@@ -424,8 +483,8 @@
   //
   //   Footle #12 3/8
   //
-  //   🟨⬛⬛⬛🟨🟨
-  //   🟩🟨🟨🟨🟩⬛
+  //   🟨⬛⬛🟨🟨🟩
+  //   🟩🟨🟨🟩🟩⬛
   //   🟩🟩🟩🟩🟩🟩
   function buildShareText() {
     const { won, guessesUsed } = state.result;
@@ -433,7 +492,7 @@
     // state.history is oldest-first, so rows read in the order you guessed.
     const grid = state.history
       .map((fb) =>
-        [fb.nationality, fb.club, fb.position, fb.age, fb.overall, fb.height].map((c) => square(c.result)).join("")
+        [fb.nationality, fb.club, fb.position, fb.age, fb.overall, fb.skillMoves, fb.weakFoot].map((c) => square(c.result)).join("")
       )
       .join("\n");
     const name =
@@ -499,17 +558,6 @@
     }
   });
 
-  // Player photos, with a three-step fallback so a failing image host never
-  // leaves a blank grey circle:
-  //   1. load straight from the CDN, sending no referrer (defeats simple
-  //      hotlink protection that rejects requests coming from other sites)
-  //   2. if that fails, ask our own server (/api/face/:id) to fetch it
-  //   3. if that fails too, show an initials badge
-  function faceImg(url, id, name) {
-    if (!url) return initialsBadge(name);
-    return `<img src="${escapeHtml(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-face-id="${escapeHtml(id)}" data-name="${escapeHtml(name)}" />`;
-  }
-
   function initialsOf(name) {
     const parts = String(name || "").replace(/[.\-']/g, " ").split(/\s+/).filter(Boolean);
     if (parts.length === 0) return "?";
@@ -520,23 +568,6 @@
   function initialsBadge(name) {
     return `<span class="face-fallback" aria-hidden="true">${escapeHtml(initialsOf(name))}</span>`;
   }
-
-  // <img> error events don't bubble, so listen in the capture phase.
-  document.addEventListener(
-    "error",
-    (e) => {
-      const img = e.target;
-      if (!(img instanceof HTMLImageElement) || !img.dataset.faceId) return;
-      if (!img.dataset.proxied) {
-        img.dataset.proxied = "1";
-        img.removeAttribute("referrerpolicy");
-        img.src = `/api/face/${encodeURIComponent(img.dataset.faceId)}`;
-        return;
-      }
-      img.outerHTML = initialsBadge(img.dataset.name);
-    },
-    true
-  );
 
   function escapeHtml(str) {
     return String(str).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -618,6 +649,7 @@
     if (active) {
       active.scrollIntoView({ block: "nearest" });
       els.guessInput.setAttribute("aria-activedescendant", active.id);
+      showSuggestionPreview(currentResults.find((player) => player.id === active.dataset.id));
     } else {
       els.guessInput.removeAttribute("aria-activedescendant");
     }
@@ -643,12 +675,17 @@
       els.guessInput.setAttribute("aria-expanded", "true");
       return;
     }
-    els.suggestions.innerHTML = results
+    els.suggestions.innerHTML = `
+      <div class="suggestion-help">Hover or use ↑ ↓ to preview before guessing</div>
+      <div class="suggestion-list" role="presentation"></div>
+      <div class="suggestion-preview" id="suggestionPreview" hidden aria-live="polite"></div>`;
+    const suggestionList = els.suggestions.querySelector(".suggestion-list");
+    suggestionList.innerHTML = results
       .map((p) => {
         const already = state.guessedIds.has(p.id);
         return `
         <div class="suggestion-item ${already ? "disabled" : ""}" data-id="${p.id}" id="opt-${p.id}" role="option" aria-selected="false"${already ? ' aria-disabled="true"' : ""}>
-          ${faceImg(p.face_url, p.id, p.short_name)}
+          ${initialsBadge(p.short_name)}
           <div>
             <div class="suggestion-name">${escapeHtml(p.short_name)}${already ? " (already guessed)" : ""}</div>
             <div class="suggestion-sub">${escapeHtml(p.club_name)} · ${escapeHtml(p.nationality_name)}</div>
@@ -656,10 +693,12 @@
         </div>`;
       })
       .join("");
+    const playersById = new Map(results.map((player) => [player.id, player]));
     els.suggestions.hidden = false;
     els.guessInput.setAttribute("aria-expanded", "true");
 
-    els.suggestions.querySelectorAll(".suggestion-item:not(.disabled)").forEach((el) => {
+    suggestionList.querySelectorAll(".suggestion-item:not(.disabled)").forEach((el) => {
+      el.addEventListener("pointerenter", () => showSuggestionPreview(playersById.get(el.dataset.id)));
       el.addEventListener("click", () => {
         const id = el.getAttribute("data-id");
         hideSuggestions();
@@ -668,6 +707,40 @@
         submitGuess(id);
       });
     });
+  }
+
+  function showSuggestionPreview(player) {
+    if (!player) return;
+    const preview = document.getElementById("suggestionPreview");
+    if (!preview) return;
+
+    const stats = [
+      ["OVR", player.overall],
+      ["Age", player.age],
+      ["Pos", player.position],
+      ["Skills", `${player.skill_moves}★`],
+      ["Weak foot", `${player.weak_foot}★`],
+      ["PAC", player.attributes.pace],
+      ["SHO", player.attributes.shooting],
+      ["PAS", player.attributes.passing],
+      ["DRI", player.attributes.dribbling],
+      ["DEF", player.attributes.defending],
+      ["PHY", player.attributes.physicality],
+    ];
+    preview.innerHTML = `
+      <div class="preview-heading">
+        <strong>${escapeHtml(player.long_name || player.short_name)}</strong>
+        <span>${escapeHtml(player.club_name)} · ${escapeHtml(player.nationality_name)}</span>
+      </div>
+      <div class="preview-stats">
+        ${stats.map(([label, value]) => `
+          <div class="preview-stat">
+            <span>${escapeHtml(label)}</span>
+            <strong>${escapeHtml(value)}</strong>
+          </div>`).join("")}
+      </div>
+      ${player.playstyles.length ? `<div class="preview-playstyles"><span>PlayStyles</span>${player.playstyles.map((style) => `<b>${escapeHtml(style)}</b>`).join("")}</div>` : ""}`;
+    preview.hidden = false;
   }
 
   function hideSuggestions() {
