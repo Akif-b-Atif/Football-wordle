@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Footle — Daily Football Guessing Game</title>
-<meta name="description" content="Guess the hidden footballer in 8 tries using nationality, club, position, age and more as clues. A new Footle every day." />
+<meta name="description" content="Guess the hidden footballer in 8 tries using nationality, club, position, age and player ratings as clues. A new Footle every day." />
 <meta name="theme-color" content="#0a2e23" />
 <meta property="og:title" content="Footle — Daily Football Guessing Game" />
 <meta property="og:description" content="Guess the hidden footballer in 8 tries. A new challenge every day." />
@@ -105,7 +105,7 @@
 
   <section id="emptyState" class="empty-state">
     <h2>Who's the mystery player?</h2>
-    <p>Guess anyone from the Premier League, La Liga, Bundesliga, Serie A or Ligue 1. Every guess lights up six clues to narrow it down.</p>
+    <p>Guess any player from the men's FC 27 database. Every guess lights up clues about their club, country, position and ratings.</p>
     <button type="button" class="btn btn-ghost" id="emptyHowTo">How to play</button>
   </section>
 
@@ -118,8 +118,8 @@
         <div class="head-cell">Pos</div>
         <div class="head-cell">Age</div>
         <div class="head-cell">OVR</div>
-        <div class="head-cell">Height</div>
-        <div class="head-cell">Shared traits</div>
+        <div class="head-cell">Skills</div>
+        <div class="head-cell">Weak Foot</div>
       </div>
       <div class="results-body" id="resultsBody"></div>
     </div>
@@ -128,8 +128,10 @@
 </main>
 
 <footer class="pitch-footer">
-  <p class="disclaimer">All player info (clubs, ages, ratings, heights) is as of 2022 and may be out of date.</p>
+  <p class="disclaimer">Data: EA SPORTS FC 27 snapshot · 12 Sep 2026</p>
   <p>New Daily Challenge every day at 00:00 UTC.</p>
+  <p class="creator-credit">Made for fun, to turn football knowledge into a daily guessing game.</p>
+  <p class="creator-links">Made by Akif bin Atif · <a href="https://www.linkedin.com/in/akif-bin-atif-06b355423/" target="_blank" rel="noopener noreferrer">LinkedIn</a> · <a href="https://github.com/Akif-b-Atif" target="_blank" rel="noopener noreferrer">GitHub</a></p>
 </footer>
 
 <noscript><p class="noscript">Footle needs JavaScript to run. Please enable it and reload.</p></noscript>
@@ -159,40 +161,45 @@
         <tr><th scope="row">Pos</th><td>Different position, <strong>same group</strong> (attackers, midfielders or defenders)<span class="eg">e.g. LW and ST</span></td></tr>
         <tr><th scope="row">Age</th><td>Within <strong>2 years</strong></td></tr>
         <tr><th scope="row">OVR</th><td>Within <strong>2 rating points</strong></td></tr>
-        <tr><th scope="row">Height</th><td>Within <strong>3 cm</strong></td></tr>
+        <tr><th scope="row">Skill Moves</th><td>Within <strong>1 star</strong> is yellow; arrows show whether the answer has more or fewer stars</td></tr>
+        <tr><th scope="row">Weak Foot</th><td>Within <strong>1 star</strong> is yellow; arrows show whether the answer has more or fewer stars</td></tr>
+        <tr><th scope="row">Attributes</th><td>PACE, SHOOTING, PASSING, DRIBBLING, DEFENDING and PHYSICALITY are each within <strong>3 rating points</strong></td></tr>
       </tbody>
     </table>
 
     <h3>Arrows</h3>
-    <p><span class="inline-arrow">▲</span> means the answer's number is <strong>higher</strong> than your guess; <span class="inline-arrow">▼</span> means <strong>lower</strong>. You'll see them on Age, OVR and Height, whatever the colour.</p>
+    <p><span class="inline-arrow">▲</span> means the answer's number is <strong>higher</strong> than your guess; <span class="inline-arrow">▼</span> means <strong>lower</strong>. You'll see them on Age, OVR, Skill Moves, Weak Foot and the six player attributes, whatever the colour.</p>
 
-    <h3>Shared traits</h3>
-    <p>Playing-style traits (like <em>Flair</em> or <em>Power Header</em>) that your guess has in common with the answer. Only shared ones are shown.</p>
+    <h3>Player attributes</h3>
+    <p>Tap <strong>Stats</strong> inside the OVR tile to expand the six attribute clues: Pace (PAC), Shooting (SHO), Passing (PAS), Dribbling (DRI), Defending (DEF) and Physicality (PHY). They start collapsed to keep each guess easy to scan.</p>
+
+    <h3>Shared PlayStyles</h3>
+    <p>Only PlayStyles your guess has in common with the answer are shown.</p>
 
     <h3>Example</h3>
-    <p class="example-caption">The answer is <strong>Harry Kane</strong> (England, Tottenham). You guess <strong>Raheem Sterling</strong>:</p>
+    <p class="example-caption">The answer is <strong>Harry Kane</strong> (England, Bayern Munich). You guess <strong>Jude Bellingham</strong> (England, Real Madrid):</p>
     <div class="example-grid" role="group" aria-label="Worked example">
       <div><span class="example-label">Nation</span><span class="tile green">England</span></div>
-      <div><span class="example-label">Club</span><span class="tile yellow">Man City</span></div>
-      <div><span class="example-label">Pos</span><span class="tile yellow">LW</span></div>
-      <div><span class="example-label">Age</span><span class="tile yellow arrow-up">26</span></div>
-      <div><span class="example-label">OVR</span><span class="tile yellow arrow-up">88</span></div>
-      <div><span class="example-label">Height</span><span class="tile gray arrow-up">170</span></div>
+      <div><span class="example-label">Club</span><span class="tile gray">Real Madrid</span></div>
+      <div><span class="example-label">Pos</span><span class="tile gray">CAM</span></div>
+      <div><span class="example-label">Age</span><span class="tile gray arrow-up">23</span></div>
+      <div><span class="example-label">OVR</span><span class="tile green">90</span></div>
+      <div><span class="example-label">Skills</span><span class="tile yellow">4</span></div>
+      <div><span class="example-label">Weak Foot</span><span class="tile green">4</span></div>
     </div>
     <ul class="example-notes">
-      <li>Same country → <strong>green</strong>.</li>
-      <li>Different club, both in the Premier League → <strong>yellow</strong>. Both are attackers → <strong>yellow</strong>.</li>
-      <li>Age and OVR are within 2 of the answer, and ▲ says the answer is a bit higher → <strong>yellow</strong>.</li>
-      <li>170 cm is more than 3 cm off, so it's <strong>gray</strong>; ▲ says the answer is taller.</li>
+      <li>Same country → <strong>green</strong>. Different clubs in different leagues → <strong>gray</strong>.</li>
+      <li>CAM and ST are different position groups → <strong>gray</strong>. Skill Moves within one star are yellow; Weak Foot matches are green.</li>
+      <li>Age is more than 2 years apart → <strong>gray</strong>; ▲ says the answer is older. Both players have 90 OVR → <strong>green</strong>.</li>
     </ul>
 
     <h3>Good to know</h3>
     <ul class="notes-list">
-      <li>The hidden player is always a well-known star (one of the ~180 highest-rated players), but you can guess anyone from the Big 5 leagues.</li>
+      <li>The hidden player is chosen from the 200 highest-rated players. You can guess any player in the men's dataset, across its leagues.</li>
       <li>Daily Challenge gives everyone the same footballer each day. Unlimited mode picks a fresh random player every game.</li>
     </ul>
 
-    <p class="disclaimer-box"><strong>Heads up:</strong> all player info (clubs, ages, ratings and heights) is as of 2022 (FIFA 22 data). Players may have since moved, retired or changed rating.</p>
+    <p class="disclaimer-box"><strong>Dataset:</strong> EA SPORTS FC 27 men's player data, snapshot from 12 September 2026. Player clubs and ratings may change after this snapshot.</p>
   </div>
 </div>
 

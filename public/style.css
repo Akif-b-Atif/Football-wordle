@@ -272,8 +272,9 @@ button { font-family: inherit; touch-action: manipulation; }
   top: calc(100% + 6px);
   left: 0; right: 0;
   z-index: 30;
-  max-height: 360px;
-  max-height: min(52dvh, 360px);
+  display: flex;
+  flex-direction: column;
+  max-height: min(70dvh, 520px);
   overflow-y: auto;
   overscroll-behavior: contain;
   border-radius: var(--radius-m);
@@ -281,6 +282,8 @@ button { font-family: inherit; touch-action: manipulation; }
   color: var(--ink);
   box-shadow: var(--shadow-card);
 }
+.suggestion-list { max-height: min(34dvh, 280px); overflow-y: auto; overscroll-behavior: contain; }
+.suggestion-help { padding: 7px 14px; border-bottom: 1px solid var(--line); color: var(--ink-soft); font-size: 11px; }
 .suggestion-item {
   display: flex;
   align-items: center;
@@ -293,12 +296,43 @@ button { font-family: inherit; touch-action: manipulation; }
 .suggestion-item:last-child { border-bottom: 0; }
 .suggestion-item:hover, .suggestion-item.active { background: rgba(33, 122, 72, 0.12); }
 .suggestion-item.disabled { opacity: 0.45; cursor: not-allowed; }
-.suggestion-item img { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; background: #ddd8c8; flex: none; }
-.suggestion-name { font-weight: 600; font-size: 15px; line-height: 1.25; }
+.suggestion-name {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
 .suggestion-sub { font-size: 13px; color: var(--ink-soft); line-height: 1.3; }
 .suggestion-empty { padding: 16px; color: var(--ink-soft); font-size: 14px; }
+.suggestion-preview {
+  flex: none;
+  padding: 12px;
+  border-top: 1px solid var(--line);
+  background: #fffdf7;
+}
+.preview-heading { display: flex; flex-direction: column; gap: 2px; min-width: 0; margin-bottom: 9px; }
+.preview-heading strong { overflow-wrap: anywhere; font-size: 14px; line-height: 1.25; }
+.preview-heading span, .preview-playstyles > span { color: var(--ink-soft); font-size: 11px; }
+.preview-stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; }
+.preview-stat {
+  min-width: 0;
+  padding: 5px 3px;
+  border-radius: 7px;
+  background: rgba(20, 90, 61, 0.08);
+  text-align: center;
+  line-height: 1.15;
+}
+.preview-stat span { display: block; color: var(--ink-soft); font-size: 9px; font-weight: 600; }
+.preview-stat strong { display: block; margin-top: 2px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.preview-playstyles { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 8px; }
+.preview-playstyles > span { width: 100%; }
+.preview-playstyles b { padding: 3px 7px; border-radius: 999px; background: var(--pitch-700); color: var(--chalk); font-size: 10px; }
 
-/* initials badge shown when a player photo can't be loaded */
+/* The player dataset does not include photos; use initials badges instead. */
 .face-fallback {
   display: inline-flex; align-items: center; justify-content: center; flex: none;
   border-radius: 50%;
@@ -362,8 +396,9 @@ button { font-family: inherit; touch-action: manipulation; }
    phone / tablet  (card, two rows of tiles)
      [avatar Name                       #3]
      [ Nation ][   Club     ][Pos]
-     [  Age   ][  OVR       ][ Height ]
-     Shared traits: (chip) (chip)
+     [ Age ][ OVR ][ Skills ][ Weak Foot ]
+     [expandable player attributes]
+     Shared PlayStyles: (chip) (chip)
    laptop  (one row per guess, with a header row)
 --------------------------------------------------------------------- */
 .results-head { display: none; }
@@ -390,8 +425,15 @@ button { font-family: inherit; touch-action: manipulation; }
   font-weight: 700;
   font-size: 16px;
 }
-.player-col img { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; background: #ddd8c8; flex: none; }
-.player-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.player-name {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+  line-height: 1.2;
+}
 .guess-no { margin-left: auto; padding-left: 8px; font-size: 12px; font-weight: 600; color: var(--ink-soft); flex: none; }
 
 .result-cell {
@@ -425,10 +467,38 @@ button { font-family: inherit; touch-action: manipulation; }
 .cell-nation { grid-column: span 2; }
 .cell-club   { grid-column: span 3; }
 .cell-pos    { grid-column: span 1; }
-.cell-age, .cell-overall, .cell-height { grid-column: span 2; }
+.cell-age, .cell-overall { grid-column: span 2; }
+.cell-skill-moves, .cell-weak-foot { grid-column: span 1; }
 
 .arrow-up .val::after { content: " ▲"; font-size: 0.8em; }
 .arrow-down .val::after { content: " ▼"; font-size: 0.8em; }
+
+.stats-toggle {
+  width: 100%;
+  min-height: 44px;
+  padding: 3px 8px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+}
+.stats-toggle:hover { background: rgba(127, 127, 127, 0.16); }
+.stats-toggle:focus-visible { outline-color: var(--ink); }
+
+.attribute-panel {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.cell-attribute { min-height: 48px; }
+.cell-attribute::before { font-size: 10px; }
 
 .traits-col {
   grid-column: 1 / -1;
@@ -439,7 +509,7 @@ button { font-family: inherit; touch-action: manipulation; }
   padding-top: 4px;
   min-width: 0;
 }
-.traits-col::before { content: "Shared traits"; width: 100%; font-size: 11px; font-weight: 600; color: var(--ink-soft); }
+.traits-col::before { content: "Shared PlayStyles"; width: 100%; font-size: 11px; font-weight: 600; color: var(--ink-soft); }
 .traits-col.is-empty::before { display: none; }
 .trait-chip {
   padding: 4px 10px;
@@ -469,7 +539,7 @@ button { font-family: inherit; touch-action: manipulation; }
 /* laptop: single-row table */
 @media (min-width: 860px) {
   .results-head, .result-row {
-    grid-template-columns: minmax(150px, 1.5fr) 1.15fr 1.4fr 0.7fr 0.7fr 0.7fr 0.85fr 1.5fr;
+    grid-template-columns: minmax(145px, 1.35fr) 1.05fr 1.3fr 0.6fr 0.55fr 0.7fr 0.65fr 0.65fr;
     gap: 6px;
   }
   .results-head {
@@ -486,7 +556,10 @@ button { font-family: inherit; touch-action: manipulation; }
   .guess-no { display: none; }
   .result-cell { min-height: 64px; font-size: 14px; }
   .result-cell::before { display: none; }
-  .cell-nation, .cell-club, .cell-pos, .cell-age, .cell-overall, .cell-height { grid-column: auto; }
+  .cell-attribute::before { display: block; }
+  .cell-nation, .cell-club, .cell-pos, .cell-age, .cell-overall, .cell-skill-moves, .cell-weak-foot { grid-column: auto; }
+  .attribute-panel { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .stats-toggle { width: auto; min-height: 28px; font-size: 9px; }
   .traits-col { grid-column: auto; padding: 0; align-content: center; }
   .traits-col::before { display: none; }
 }
@@ -513,7 +586,6 @@ button { font-family: inherit; touch-action: manipulation; }
 .end-card > p { margin-top: 4px; color: var(--ink-soft); }
 
 .reveal { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 18px 0 4px; text-align: left; }
-.reveal img { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; background: #ddd8c8; border: 3px solid var(--amber); flex: none; }
 .reveal-name { font-weight: 700; font-size: 18px; line-height: 1.25; }
 .reveal-sub { font-size: 13px; color: var(--ink-soft); line-height: 1.35; }
 
@@ -552,6 +624,9 @@ button { font-family: inherit; touch-action: manipulation; }
   color: var(--chalk-dim);
 }
 .pitch-footer p + p { margin-top: 2px; }
+.pitch-footer a { color: var(--chalk); text-decoration-color: var(--amber); text-underline-offset: 2px; }
+.pitch-footer a:hover { color: var(--amber); }
+.creator-credit { font-size: 12px; }
 
 /* ---------------------------------------------------------------------
    Popups: centred dialog on laptop, bottom sheet on phones
@@ -660,7 +735,8 @@ button { font-family: inherit; touch-action: manipulation; }
 .rules-table .eg { display: block; margin-top: 2px; font-size: 12.5px; color: var(--ink-soft); }
 
 .example-caption { margin-bottom: 10px; }
-.example-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin: 8px 0 12px; }
+.example-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 8px 0 12px; }
+@media (min-width: 700px) { .example-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); } }
 .example-label { display: block; margin-bottom: 3px; font-size: 11px; font-weight: 600; color: var(--ink-soft); text-align: center; }
 .tile {
   display: flex; align-items: center; justify-content: center;
