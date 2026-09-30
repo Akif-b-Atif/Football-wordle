@@ -23,12 +23,16 @@ const path = require("path");
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const { parse } = require("csv-parse/sync");
+const { createDailyScheduler } = require("./lib/daily");
 
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, "data", "players.csv");
 const DATASET_VERSION = "fc27-2026-09-12-clues-v2";
 const MAX_GUESSES = 8;
+// Seed for the daily answer schedule. Anyone who knows it can compute every
+// future answer, so set a private value in production (see lib/daily.js).
+const DAILY_SEED = process.env.DAILY_SEED || "footle-daily-dev-seed";
 
 // Every player in the CSV is a valid *guess* (autocomplete/search), but only
 // the top N players — by the CSV's own sort order (overall desc, then name)
@@ -231,18 +235,9 @@ function todayKey() {
   return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 }
 
-function hashString(str) {
-  let h = 0;
-  for (let i = 0; i < str.length; i++) {
-    h = (h * 31 + str.charCodeAt(i)) >>> 0;
-  }
-  return h;
-}
-
-function dailyPlayerFor(dateKey) {
-  const idx = hashString(dateKey) % ANSWER_POOL.length;
-  return ANSWER_POOL[idx];
-}
+// Shuffled-cycle schedule: deterministic per date, no repeats until the whole
+// answer pool has been used (see lib/daily.js).
+const dailyPlayerFor = createDailyScheduler(ANSWER_POOL, DAILY_SEED);
 
 // ---------------------------------------------------------------------------
 // Comparison
@@ -496,3 +491,5 @@ if (require.main === module) {
 }
 
 module.exports = app;
+// Exposed for scripts/daily.js (schedule preview) and tests.
+module.exports.dailyPlayerFor = dailyPlayerFor;
