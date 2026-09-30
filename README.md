@@ -35,7 +35,11 @@ source dataset is credited above.
   answers to highly rated, relatively recognizable players while leaving the
   full men's dataset searchable. Change the cutoff with `ANSWER_POOL_SIZE`.
 - Daily Challenge uses the same deterministic answer for everyone each UTC
-  day. Unlimited mode picks a random answer from the same pool.
+  day. The answer is a pure function of the date, `DAILY_SEED` and the answer
+  pool: each cycle of `ANSWER_POOL_SIZE` days is a seeded shuffle of the pool
+  (no repeats until every player has appeared). Set a private `DAILY_SEED` in
+  production and preview the schedule with `npm run daily -- 2026-12-25 14`.
+  Unlimited mode picks a random answer from the same pool.
 - Game state is carried in a signed JWT; no account, database, or sticky
   server session is needed.
 - Each guess returns clue feedback: green is exact, yellow is close, and gray

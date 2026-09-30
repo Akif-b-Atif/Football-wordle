@@ -9,7 +9,8 @@
   },
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "daily": "node scripts/daily.js"
   },
   "dependencies": {
     "csv-parse": "^5.5.6",
